@@ -31,28 +31,22 @@ class ProxmoxConfig(BaseSettings):
     MCP_HTTP_PORT: int = 3001
     LOG_LEVEL: str = "INFO"
 
-    # Parsed list fields (set by model_validator)
+    # Parsed list fields (populated by model_validator)
     _allowed_nodes_list: list[str] = []
     _protected_vmids_list: list[int] = []
 
     @model_validator(mode="after")
     def parse_list_fields(self) -> "ProxmoxConfig":
-        """Parse comma-separated string fields into lists."""
+        """Parse comma-separated env var strings into typed lists."""
         raw_nodes = self.PROXMOX_ALLOWED_NODES
         if isinstance(raw_nodes, str) and raw_nodes.strip():
             self._allowed_nodes_list = [x.strip() for x in raw_nodes.split(",") if x.strip()]
-        elif isinstance(raw_nodes, list):
-            self._allowed_nodes_list = raw_nodes
         else:
             self._allowed_nodes_list = []
 
         raw_vmids = self.PROXMOX_PROTECTED_VMIDS
         if isinstance(raw_vmids, str) and raw_vmids.strip():
-            self._protected_vmids_list = [
-                int(x.strip()) for x in raw_vmids.split(",") if x.strip()
-            ]
-        elif isinstance(raw_vmids, list):
-            self._protected_vmids_list = raw_vmids
+            self._protected_vmids_list = [int(x.strip()) for x in raw_vmids.split(",") if x.strip()]
         else:
             self._protected_vmids_list = []
 
@@ -60,10 +54,10 @@ class ProxmoxConfig(BaseSettings):
 
     @property
     def allowed_nodes(self) -> list[str]:
-        """Return parsed allowed nodes list."""
+        """Parsed list of allowed node names."""
         return self._allowed_nodes_list
 
     @property
     def protected_vmids(self) -> list[int]:
-        """Return parsed protected VMIDs list."""
+        """Parsed list of protected VMIDs."""
         return self._protected_vmids_list
