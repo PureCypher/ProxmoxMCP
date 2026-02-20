@@ -15,6 +15,7 @@ def mock_client():
 
 # --- list_storage ---
 
+
 @pytest.mark.asyncio
 async def test_list_storage(mock_client):
     from proxmox_mcp.tools.storage import list_storage
@@ -76,6 +77,7 @@ async def test_list_storage_error(mock_client):
 
 # --- get_storage_status ---
 
+
 @pytest.mark.asyncio
 async def test_get_storage_status(mock_client):
     from proxmox_mcp.tools.storage import get_storage_status
@@ -114,6 +116,7 @@ async def test_get_storage_status_error(mock_client):
 
 
 # --- list_storage_content ---
+
 
 @pytest.mark.asyncio
 async def test_list_storage_content(mock_client):
@@ -174,6 +177,7 @@ async def test_list_storage_content_error(mock_client):
 
 # --- get_available_isos ---
 
+
 @pytest.mark.asyncio
 async def test_get_available_isos(mock_client):
     from proxmox_mcp.tools.storage import get_available_isos
@@ -206,6 +210,7 @@ async def test_get_available_isos_custom_storage(mock_client):
 
 
 # --- get_available_templates ---
+
 
 @pytest.mark.asyncio
 async def test_get_available_templates(mock_client):

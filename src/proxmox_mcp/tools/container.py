@@ -11,11 +11,13 @@ logger = logging.getLogger("proxmox-mcp")
 
 def get_client():
     from proxmox_mcp.server import proxmox_client
+
     return proxmox_client
 
 
 def get_mcp():
     from proxmox_mcp.server import mcp
+
     return mcp
 
 
@@ -70,7 +72,9 @@ async def get_container_status(vmid: int, node: str | None = None) -> dict:
         data = await client.api_call(client.api.nodes(node).lxc(vmid).status.current.get)
         return {"status": "success", "vmid": vmid, "node": node, "data": data}
     except Exception as e:
-        return format_error_response(e, suggestion="Use list_containers to see available containers.")
+        return format_error_response(
+            e, suggestion="Use list_containers to see available containers."
+        )
 
 
 @mcp.tool()
@@ -183,8 +187,12 @@ async def reboot_container(vmid: int, node: str | None = None) -> dict:
 
 @mcp.tool()
 async def clone_container(
-    vmid: int, newid: int, name: str, node: str | None = None,
-    full: bool = True, target_node: str | None = None,
+    vmid: int,
+    newid: int,
+    name: str,
+    node: str | None = None,
+    full: bool = True,
+    target_node: str | None = None,
 ) -> dict:
     """Clone an LXC container.
 
@@ -215,8 +223,11 @@ async def clone_container(
 
 @mcp.tool()
 async def migrate_container(
-    vmid: int, target_node: str, node: str | None = None,
-    online: bool = False, restart: bool = True,
+    vmid: int,
+    target_node: str,
+    node: str | None = None,
+    online: bool = False,
+    restart: bool = True,
 ) -> dict:
     """Migrate an LXC container to another node.
 
@@ -236,7 +247,9 @@ async def migrate_container(
         logger.info("Migrating container %d from %s to %s", vmid, node, target_node)
         upid = await client.api_call(
             client.api.nodes(node).lxc(vmid).migrate.post,
-            target=target_node, online=1 if online else 0, restart=1 if restart else 0,
+            target=target_node,
+            online=1 if online else 0,
+            restart=1 if restart else 0,
         )
         return format_task_result({"data": upid})
     except Exception as e:
@@ -245,12 +258,20 @@ async def migrate_container(
 
 @mcp.tool()
 async def create_container(
-    node: str, ostemplate: str, hostname: str,
-    vmid: int | None = None, password: str | None = None,
-    ssh_public_keys: str | None = None, memory: int = 512,
-    swap: int = 512, cores: int = 1, rootfs_size: str = "8",
-    storage: str = "local-lvm", net_bridge: str = "vmbr0",
-    ip_config: str = "dhcp", unprivileged: bool = True,
+    node: str,
+    ostemplate: str,
+    hostname: str,
+    vmid: int | None = None,
+    password: str | None = None,
+    ssh_public_keys: str | None = None,
+    memory: int = 512,
+    swap: int = 512,
+    cores: int = 1,
+    rootfs_size: str = "8",
+    storage: str = "local-lvm",
+    net_bridge: str = "vmbr0",
+    ip_config: str = "dhcp",
+    unprivileged: bool = True,
     start_after_create: bool = False,
 ) -> dict:
     """Create a new LXC container.
@@ -312,8 +333,11 @@ async def create_container(
 
 @mcp.tool()
 async def delete_container(
-    vmid: int, node: str | None = None, purge: bool = True,
-    force: bool = False, confirm: bool = False,
+    vmid: int,
+    node: str | None = None,
+    purge: bool = True,
+    force: bool = False,
+    confirm: bool = False,
 ) -> dict:
     """Permanently delete an LXC container. Set confirm=True to execute.
 
@@ -356,11 +380,16 @@ async def delete_container(
 
 @mcp.tool()
 async def modify_container_config(
-    vmid: int, node: str | None = None,
-    memory: int | None = None, swap: int | None = None,
-    cores: int | None = None, hostname: str | None = None,
-    description: str | None = None, onboot: bool | None = None,
-    tags: str | None = None, extra_config: str | None = None,
+    vmid: int,
+    node: str | None = None,
+    memory: int | None = None,
+    swap: int | None = None,
+    cores: int | None = None,
+    hostname: str | None = None,
+    description: str | None = None,
+    onboot: bool | None = None,
+    tags: str | None = None,
+    extra_config: str | None = None,
 ) -> dict:
     """Modify LXC container configuration.
 
@@ -405,8 +434,11 @@ async def modify_container_config(
             extra = {k: v for k, v in extra.items() if k not in blocked_keys}
             kwargs.update(extra)
         if not kwargs:
-            return {"status": "error", "error_type": "InvalidParameterError",
-                    "message": "No configuration changes specified."}
+            return {
+                "status": "error",
+                "error_type": "InvalidParameterError",
+                "message": "No configuration changes specified.",
+            }
         logger.info("Modifying container %d config: %s", vmid, list(kwargs.keys()))
         await client.api_call(client.api.nodes(node).lxc(vmid).config.put, **kwargs)
         return {"status": "success", "vmid": vmid, "node": node, "changes": list(kwargs.keys())}

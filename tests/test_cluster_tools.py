@@ -14,6 +14,7 @@ def mock_client():
 
 # --- get_cluster_status ---
 
+
 @pytest.mark.asyncio
 async def test_get_cluster_status(mock_client):
     from proxmox_mcp.tools.cluster import get_cluster_status
@@ -72,6 +73,7 @@ async def test_get_cluster_status_error(mock_client):
 
 # --- get_cluster_resources ---
 
+
 @pytest.mark.asyncio
 async def test_get_cluster_resources_all(mock_client):
     from proxmox_mcp.tools.cluster import get_cluster_resources
@@ -119,6 +121,7 @@ async def test_get_cluster_resources_error(mock_client):
 
 # --- get_cluster_log ---
 
+
 @pytest.mark.asyncio
 async def test_get_cluster_log(mock_client):
     from proxmox_mcp.tools.cluster import get_cluster_log
@@ -150,6 +153,7 @@ async def test_get_cluster_log_error(mock_client):
 
 # --- get_next_vmid ---
 
+
 @pytest.mark.asyncio
 async def test_get_next_vmid(mock_client):
     from proxmox_mcp.tools.cluster import get_next_vmid
@@ -177,6 +181,7 @@ async def test_get_next_vmid_error(mock_client):
 
 
 # --- list_pools ---
+
 
 @pytest.mark.asyncio
 async def test_list_pools(mock_client):

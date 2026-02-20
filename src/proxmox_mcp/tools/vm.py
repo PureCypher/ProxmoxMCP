@@ -11,11 +11,13 @@ logger = logging.getLogger("proxmox-mcp")
 
 def get_client():
     from proxmox_mcp.server import proxmox_client
+
     return proxmox_client
 
 
 def get_mcp():
     from proxmox_mcp.server import mcp
+
     return mcp
 
 
@@ -93,9 +95,7 @@ async def get_vm_config(vmid: int, node: str | None = None) -> dict:
 
 
 @mcp.tool()
-async def get_vm_rrd_data(
-    vmid: int, node: str | None = None, timeframe: str = "hour"
-) -> dict:
+async def get_vm_rrd_data(vmid: int, node: str | None = None, timeframe: str = "hour") -> dict:
     """Get VM performance metrics (CPU, memory, disk, network) over time.
 
     Args:
@@ -110,7 +110,13 @@ async def get_vm_rrd_data(
         data = await client.api_call(
             client.api.nodes(node).qemu(vmid).rrddata.get, timeframe=timeframe
         )
-        return {"status": "success", "vmid": vmid, "node": node, "timeframe": timeframe, "data": data}
+        return {
+            "status": "success",
+            "vmid": vmid,
+            "node": node,
+            "timeframe": timeframe,
+            "data": data,
+        }
     except Exception as e:
         return format_error_response(e)
 
@@ -333,7 +339,8 @@ async def migrate_vm(
         logger.info("Migrating VM %d from %s to %s (online=%s)", vmid, node, target_node, online)
         upid = await client.api_call(
             client.api.nodes(node).qemu(vmid).migrate.post,
-            target=target_node, online=1 if online else 0,
+            target=target_node,
+            online=1 if online else 0,
         )
         return format_task_result({"data": upid})
     except Exception as e:
@@ -432,7 +439,12 @@ async def delete_vm(
                     f"All disks and data will be destroyed. This cannot be undone."
                 ),
                 "action": "Call delete_vm again with confirm=True to proceed.",
-                "vm_info": {"vmid": vmid, "name": vm_data.get("name"), "node": node, "status": vm_data.get("status")},
+                "vm_info": {
+                    "vmid": vmid,
+                    "name": vm_data.get("name"),
+                    "node": node,
+                    "status": vm_data.get("status"),
+                },
             }
         if client.is_dry_run:
             return client.dry_run_response("delete_vm", vmid=vmid, node=node)
@@ -512,8 +524,11 @@ async def modify_vm_config(
             extra = {k: v for k, v in extra.items() if k not in blocked_keys}
             kwargs.update(extra)
         if not kwargs:
-            return {"status": "error", "error_type": "InvalidParameterError",
-                    "message": "No configuration changes specified."}
+            return {
+                "status": "error",
+                "error_type": "InvalidParameterError",
+                "message": "No configuration changes specified.",
+            }
         logger.info("Modifying VM %d config on %s: %s", vmid, node, list(kwargs.keys()))
         await client.api_call(client.api.nodes(node).qemu(vmid).config.put, **kwargs)
         return {"status": "success", "vmid": vmid, "node": node, "changes": list(kwargs.keys())}

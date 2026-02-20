@@ -16,6 +16,7 @@ def mock_client():
 
 # --- list_nodes ---
 
+
 @pytest.mark.asyncio
 async def test_list_nodes(mock_client):
     from proxmox_mcp.tools.node import list_nodes
@@ -85,6 +86,7 @@ async def test_list_nodes_error(mock_client):
 
 # --- get_node_status ---
 
+
 @pytest.mark.asyncio
 async def test_get_node_status(mock_client):
     from proxmox_mcp.tools.node import get_node_status
@@ -134,6 +136,7 @@ async def test_get_node_status_invalid_name():
 
 # --- get_node_services ---
 
+
 @pytest.mark.asyncio
 async def test_get_node_services(mock_client):
     from proxmox_mcp.tools.node import get_node_services
@@ -152,6 +155,7 @@ async def test_get_node_services(mock_client):
 
 
 # --- get_node_network ---
+
 
 @pytest.mark.asyncio
 async def test_get_node_network(mock_client):
@@ -172,6 +176,7 @@ async def test_get_node_network(mock_client):
 
 # --- get_node_storage ---
 
+
 @pytest.mark.asyncio
 async def test_get_node_storage(mock_client):
     from proxmox_mcp.tools.node import get_node_storage
@@ -190,6 +195,7 @@ async def test_get_node_storage(mock_client):
 
 
 # --- get_node_syslog ---
+
 
 @pytest.mark.asyncio
 async def test_get_node_syslog(mock_client):

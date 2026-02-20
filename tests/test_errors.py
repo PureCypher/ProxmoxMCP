@@ -16,9 +16,15 @@ from proxmox_mcp.utils.errors import (
 
 def test_all_exceptions_inherit_from_base():
     for exc_class in [
-        ProxmoxConnectionError, AuthenticationError, VMNotFoundError,
-        ContainerNotFoundError, NodeNotFoundError, ProtectedResourceError,
-        NodeNotAllowedError, TaskTimeoutError, InsufficientPermissionsError,
+        ProxmoxConnectionError,
+        AuthenticationError,
+        VMNotFoundError,
+        ContainerNotFoundError,
+        NodeNotFoundError,
+        ProtectedResourceError,
+        NodeNotAllowedError,
+        TaskTimeoutError,
+        InsufficientPermissionsError,
         InvalidParameterError,
     ]:
         assert issubclass(exc_class, ProxmoxMCPError)

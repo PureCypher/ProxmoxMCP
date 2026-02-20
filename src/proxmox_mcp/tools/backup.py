@@ -10,11 +10,13 @@ logger = logging.getLogger("proxmox-mcp")
 
 def get_client():
     from proxmox_mcp.server import proxmox_client
+
     return proxmox_client
 
 
 def get_mcp():
     from proxmox_mcp.server import mcp
+
     return mcp
 
 
@@ -31,8 +33,11 @@ async def _resolve_node(client, vmid: int, node: str | None) -> str:
 
 @mcp.tool()
 async def create_snapshot(
-    vmid: int, snapname: str, node: str | None = None,
-    description: str | None = None, include_vmstate: bool = False,
+    vmid: int,
+    snapname: str,
+    node: str | None = None,
+    description: str | None = None,
+    include_vmstate: bool = False,
     vm_type: str = "qemu",
 ) -> dict:
     """Create a snapshot of a VM or container.
@@ -56,7 +61,11 @@ async def create_snapshot(
             kwargs["description"] = description
         if include_vmstate and vm_type == "qemu":
             kwargs["vmstate"] = 1
-        api_path = client.api.nodes(node).qemu(vmid) if vm_type == "qemu" else client.api.nodes(node).lxc(vmid)
+        api_path = (
+            client.api.nodes(node).qemu(vmid)
+            if vm_type == "qemu"
+            else client.api.nodes(node).lxc(vmid)
+        )
         logger.info("Creating snapshot '%s' for %s %d", snapname, vm_type, vmid)
         upid = await client.api_call(api_path.snapshot.post, **kwargs)
         return format_task_result({"data": upid})
@@ -77,7 +86,11 @@ async def list_snapshots(vmid: int, node: str | None = None, vm_type: str = "qem
         client = get_client()
         validate_vmid(vmid)
         node = await _resolve_node(client, vmid, node)
-        api_path = client.api.nodes(node).qemu(vmid) if vm_type == "qemu" else client.api.nodes(node).lxc(vmid)
+        api_path = (
+            client.api.nodes(node).qemu(vmid)
+            if vm_type == "qemu"
+            else client.api.nodes(node).lxc(vmid)
+        )
         data = await client.api_call(api_path.snapshot.get)
         return {"status": "success", "vmid": vmid, "node": node, "snapshots": data}
     except Exception as e:
@@ -86,8 +99,11 @@ async def list_snapshots(vmid: int, node: str | None = None, vm_type: str = "qem
 
 @mcp.tool()
 async def rollback_snapshot(
-    vmid: int, snapname: str, node: str | None = None,
-    vm_type: str = "qemu", confirm: bool = False,
+    vmid: int,
+    snapname: str,
+    node: str | None = None,
+    vm_type: str = "qemu",
+    confirm: bool = False,
 ) -> dict:
     """Rollback a VM/CT to a snapshot. Set confirm=True to execute.
 
@@ -111,7 +127,11 @@ async def rollback_snapshot(
             }
         if client.is_dry_run:
             return client.dry_run_response("rollback_snapshot", vmid=vmid, snapname=snapname)
-        api_path = client.api.nodes(node).qemu(vmid) if vm_type == "qemu" else client.api.nodes(node).lxc(vmid)
+        api_path = (
+            client.api.nodes(node).qemu(vmid)
+            if vm_type == "qemu"
+            else client.api.nodes(node).lxc(vmid)
+        )
         logger.warning("Rolling back %s %d to snapshot '%s'", vm_type, vmid, snapname)
         upid = await client.api_call(api_path.snapshot(snapname).rollback.post)
         return format_task_result({"data": upid})
@@ -121,8 +141,11 @@ async def rollback_snapshot(
 
 @mcp.tool()
 async def delete_snapshot(
-    vmid: int, snapname: str, node: str | None = None,
-    vm_type: str = "qemu", confirm: bool = False,
+    vmid: int,
+    snapname: str,
+    node: str | None = None,
+    vm_type: str = "qemu",
+    confirm: bool = False,
 ) -> dict:
     """Delete a snapshot. Set confirm=True to execute.
 
@@ -145,7 +168,11 @@ async def delete_snapshot(
             }
         if client.is_dry_run:
             return client.dry_run_response("delete_snapshot", vmid=vmid, snapname=snapname)
-        api_path = client.api.nodes(node).qemu(vmid) if vm_type == "qemu" else client.api.nodes(node).lxc(vmid)
+        api_path = (
+            client.api.nodes(node).qemu(vmid)
+            if vm_type == "qemu"
+            else client.api.nodes(node).lxc(vmid)
+        )
         logger.warning("Deleting snapshot '%s' from %s %d", snapname, vm_type, vmid)
         upid = await client.api_call(api_path.snapshot(snapname).delete)
         return format_task_result({"data": upid})
@@ -155,8 +182,12 @@ async def delete_snapshot(
 
 @mcp.tool()
 async def create_backup(
-    vmid: int, node: str | None = None, storage: str = "local",
-    mode: str = "snapshot", compress: str = "zstd", notes: str | None = None,
+    vmid: int,
+    node: str | None = None,
+    storage: str = "local",
+    mode: str = "snapshot",
+    compress: str = "zstd",
+    notes: str | None = None,
 ) -> dict:
     """Initiate a vzdump backup of a VM or container.
 
@@ -203,21 +234,34 @@ async def list_backups(node: str, storage: str = "local", vmid: int | None = Non
         validate_node_name(node)
         client.validate_node(node)
         kwargs = {"content": "backup"}
-        data = await client.api_call(
-            client.api.nodes(node).storage(storage).content.get, **kwargs
-        )
+        data = await client.api_call(client.api.nodes(node).storage(storage).content.get, **kwargs)
         if vmid is not None:
             vmid_str = str(vmid)
-            data = [b for b in data if f"-{vmid_str}-" in b.get("volid", "") or b.get("volid", "").endswith(f"-{vmid_str}")]
-        return {"status": "success", "node": node, "storage": storage, "backups": data, "total": len(data)}
+            data = [
+                b
+                for b in data
+                if f"-{vmid_str}-" in b.get("volid", "")
+                or b.get("volid", "").endswith(f"-{vmid_str}")
+            ]
+        return {
+            "status": "success",
+            "node": node,
+            "storage": storage,
+            "backups": data,
+            "total": len(data),
+        }
     except Exception as e:
         return format_error_response(e)
 
 
 @mcp.tool()
 async def restore_backup(
-    node: str, storage: str, archive: str, vmid: int,
-    force: bool = False, confirm: bool = False,
+    node: str,
+    storage: str,
+    archive: str,
+    vmid: int,
+    force: bool = False,
+    confirm: bool = False,
 ) -> dict:
     """Restore a VM/CT from a backup archive. Set confirm=True to execute.
 

@@ -10,11 +10,13 @@ logger = logging.getLogger("proxmox-mcp")
 
 def get_client():
     from proxmox_mcp.server import proxmox_client
+
     return proxmox_client
 
 
 def get_mcp():
     from proxmox_mcp.server import mcp
+
     return mcp
 
 
@@ -41,9 +43,7 @@ async def list_tasks(
             validate_node_name(node)
             client.validate_node(node)
             logger.info(f"Listing tasks for node '{node}' (limit={limit})")
-            data = await client.api_call(
-                client.api.nodes(node).tasks.get, limit=limit
-            )
+            data = await client.api_call(client.api.nodes(node).tasks.get, limit=limit)
         else:
             logger.info(f"Listing tasks across all nodes (limit={limit})")
             # Get all nodes, then query tasks from each
@@ -101,9 +101,7 @@ async def get_task_status(node: str, upid: str) -> dict:
         client = get_client()
         client.validate_node(node)
         logger.info(f"Fetching task status for UPID '{upid}' on node '{node}'")
-        data = await client.api_call(
-            client.api.nodes(node).tasks(upid).status.get
-        )
+        data = await client.api_call(client.api.nodes(node).tasks(upid).status.get)
 
         return {
             "status": "success",
@@ -130,9 +128,7 @@ async def get_task_log(node: str, upid: str, limit: int = 100) -> dict:
         client = get_client()
         client.validate_node(node)
         logger.info(f"Fetching task log for UPID '{upid}' on node '{node}'")
-        data = await client.api_call(
-            client.api.nodes(node).tasks(upid).log.get, limit=limit
-        )
+        data = await client.api_call(client.api.nodes(node).tasks(upid).log.get, limit=limit)
 
         return {
             "status": "success",
@@ -147,9 +143,7 @@ async def get_task_log(node: str, upid: str, limit: int = 100) -> dict:
 
 
 @mcp.tool()
-async def wait_for_task(
-    node: str, upid: str, timeout: int = 300, poll_interval: int = 5
-) -> dict:
+async def wait_for_task(node: str, upid: str, timeout: int = 300, poll_interval: int = 5) -> dict:
     """Wait for a Proxmox task to complete, polling at regular intervals.
 
     Args:
@@ -171,9 +165,7 @@ async def wait_for_task(
 
         elapsed = 0
         while elapsed < timeout:
-            data = await client.api_call(
-                client.api.nodes(node).tasks(upid).status.get
-            )
+            data = await client.api_call(client.api.nodes(node).tasks(upid).status.get)
             task_status = data.get("status", "")
 
             if task_status != "running":
@@ -189,9 +181,7 @@ async def wait_for_task(
             await asyncio.sleep(poll_interval)
             elapsed += poll_interval
 
-        raise TaskTimeoutError(
-            f"Task '{upid}' did not complete within {timeout} seconds."
-        )
+        raise TaskTimeoutError(f"Task '{upid}' did not complete within {timeout} seconds.")
     except TaskTimeoutError:
         logger.warning(f"Task '{upid}' timed out after {timeout}s")
         return format_error_response(

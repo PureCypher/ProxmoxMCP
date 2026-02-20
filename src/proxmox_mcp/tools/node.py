@@ -10,11 +10,13 @@ logger = logging.getLogger("proxmox-mcp")
 
 def get_client():
     from proxmox_mcp.server import proxmox_client
+
     return proxmox_client
 
 
 def get_mcp():
     from proxmox_mcp.server import mcp
+
     return mcp
 
 
@@ -35,18 +37,20 @@ async def list_nodes() -> dict:
 
         nodes = []
         for node in data:
-            nodes.append({
-                "node": node.get("node"),
-                "status": node.get("status"),
-                "cpu_usage_percent": round(node.get("cpu", 0) * 100, 2),
-                "cpu_cores": node.get("maxcpu", 0),
-                "memory_used": format_bytes(node.get("mem", 0)),
-                "memory_total": format_bytes(node.get("maxmem", 0)),
-                "disk_used": format_bytes(node.get("disk", 0)),
-                "disk_total": format_bytes(node.get("maxdisk", 0)),
-                "uptime": format_uptime(node.get("uptime", 0)),
-                "uptime_seconds": node.get("uptime", 0),
-            })
+            nodes.append(
+                {
+                    "node": node.get("node"),
+                    "status": node.get("status"),
+                    "cpu_usage_percent": round(node.get("cpu", 0) * 100, 2),
+                    "cpu_cores": node.get("maxcpu", 0),
+                    "memory_used": format_bytes(node.get("mem", 0)),
+                    "memory_total": format_bytes(node.get("maxmem", 0)),
+                    "disk_used": format_bytes(node.get("disk", 0)),
+                    "disk_total": format_bytes(node.get("maxdisk", 0)),
+                    "uptime": format_uptime(node.get("uptime", 0)),
+                    "uptime_seconds": node.get("uptime", 0),
+                }
+            )
 
         return {
             "status": "success",

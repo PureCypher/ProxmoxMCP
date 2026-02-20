@@ -9,11 +9,13 @@ logger = logging.getLogger("proxmox-mcp")
 
 def get_client():
     from proxmox_mcp.server import proxmox_client
+
     return proxmox_client
 
 
 def get_mcp():
     from proxmox_mcp.server import mcp
+
     return mcp
 
 
@@ -90,4 +92,6 @@ async def get_vm_interfaces(vmid: int, node: str | None = None) -> dict:
             interfaces = data
         return {"status": "success", "vmid": vmid, "node": node, "interfaces": interfaces}
     except Exception as e:
-        return format_error_response(e, suggestion="VM must be running. QEMU VMs require the guest agent.")
+        return format_error_response(
+            e, suggestion="VM must be running. QEMU VMs require the guest agent."
+        )

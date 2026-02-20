@@ -4,6 +4,7 @@
 
 def get_mcp():
     from proxmox_mcp.server import mcp
+
     return mcp
 
 

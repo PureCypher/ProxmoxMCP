@@ -8,11 +8,13 @@ logger = logging.getLogger("proxmox-mcp")
 
 def get_client():
     from proxmox_mcp.server import proxmox_client
+
     return proxmox_client
 
 
 def get_mcp():
     from proxmox_mcp.server import mcp
+
     return mcp
 
 
@@ -42,14 +44,16 @@ async def get_cluster_status() -> dict:
                     "nodes": item.get("nodes"),
                 }
             elif item.get("type") == "node":
-                nodes.append({
-                    "name": item.get("name"),
-                    "id": item.get("id"),
-                    "online": item.get("online"),
-                    "ip": item.get("ip"),
-                    "level": item.get("level", ""),
-                    "local": item.get("local", 0),
-                })
+                nodes.append(
+                    {
+                        "name": item.get("name"),
+                        "id": item.get("id"),
+                        "online": item.get("online"),
+                        "ip": item.get("ip"),
+                        "level": item.get("level", ""),
+                        "local": item.get("local", 0),
+                    }
+                )
 
         return {
             "status": "success",

@@ -45,6 +45,22 @@ class InvalidParameterError(ProxmoxMCPError):
     """Invalid parameter value provided."""
 
 
+class SSHExecutionError(ProxmoxMCPError):
+    """SSH command execution failed."""
+
+
+class SafetyGateError(ProxmoxMCPError):
+    """A safety gate check prevented the operation."""
+
+
+class DeviceNotFoundError(ProxmoxMCPError):
+    """Block device not found on the node."""
+
+
+class DeviceInUseError(ProxmoxMCPError):
+    """Block device or partition is currently in use."""
+
+
 def format_error_response(error: Exception, suggestion: str | None = None) -> dict:
     """Format any exception into a structured error response dict."""
     result = {

@@ -20,11 +20,24 @@ def mock_client():
 @pytest.mark.asyncio
 async def test_list_containers(mock_client):
     from proxmox_mcp.tools.container import list_containers
-    mock_client.api_call = AsyncMock(return_value=[
-        {"vmid": 200, "name": "ct1", "status": "running", "node": "pve1",
-         "type": "lxc", "maxcpu": 1, "maxmem": 536870912, "mem": 268435456,
-         "maxdisk": 8589934592, "uptime": 3600, "cpu": 0.02},
-    ])
+
+    mock_client.api_call = AsyncMock(
+        return_value=[
+            {
+                "vmid": 200,
+                "name": "ct1",
+                "status": "running",
+                "node": "pve1",
+                "type": "lxc",
+                "maxcpu": 1,
+                "maxmem": 536870912,
+                "mem": 268435456,
+                "maxdisk": 8589934592,
+                "uptime": 3600,
+                "cpu": 0.02,
+            },
+        ]
+    )
     result = await list_containers()
     assert result["status"] == "success"
     assert result["containers"][0]["type"] == "lxc"
@@ -33,6 +46,7 @@ async def test_list_containers(mock_client):
 @pytest.mark.asyncio
 async def test_get_container_status(mock_client):
     from proxmox_mcp.tools.container import get_container_status
+
     mock_client.api_call = AsyncMock(return_value={"status": "running", "vmid": 200})
     result = await get_container_status(vmid=200)
     assert result["status"] == "success"
@@ -41,6 +55,7 @@ async def test_get_container_status(mock_client):
 @pytest.mark.asyncio
 async def test_start_container(mock_client):
     from proxmox_mcp.tools.container import start_container
+
     mock_client.api_call = AsyncMock(return_value="UPID:pve1:00001:start")
     result = await start_container(vmid=200)
     assert result["status"] == "submitted"
@@ -50,6 +65,7 @@ async def test_start_container(mock_client):
 async def test_stop_container_protected(mock_client):
     from proxmox_mcp.tools.container import stop_container
     from proxmox_mcp.utils.errors import ProtectedResourceError
+
     mock_client.check_protected.side_effect = ProtectedResourceError("protected")
     result = await stop_container(vmid=200)
     assert result["status"] == "error"
@@ -58,6 +74,7 @@ async def test_stop_container_protected(mock_client):
 @pytest.mark.asyncio
 async def test_delete_container_requires_confirm(mock_client):
     from proxmox_mcp.tools.container import delete_container
+
     mock_client.api_call = AsyncMock(
         return_value={"status": "stopped", "vmid": 200, "name": "test-ct"}
     )
@@ -68,6 +85,7 @@ async def test_delete_container_requires_confirm(mock_client):
 @pytest.mark.asyncio
 async def test_create_container(mock_client):
     from proxmox_mcp.tools.container import create_container
+
     mock_client.api_call = AsyncMock(return_value="UPID:pve1:00006:create")
     result = await create_container(
         node="pve1", ostemplate="local:vztmpl/ubuntu-22.04.tar.zst", hostname="test-ct"
