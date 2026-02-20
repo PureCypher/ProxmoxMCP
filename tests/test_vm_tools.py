@@ -59,7 +59,7 @@ async def test_get_vm_status(mock_client):
 async def test_get_vm_status_auto_detect_node(mock_client):
     from proxmox_mcp.tools.vm import get_vm_status
     mock_client.api_call = AsyncMock(return_value={"status": "running", "vmid": 100})
-    result = await get_vm_status(vmid=100)
+    await get_vm_status(vmid=100)
     mock_client.resolve_node_for_vmid.assert_called_once_with(100)
 
 

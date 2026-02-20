@@ -1,10 +1,8 @@
 import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import MagicMock, patch
 from proxmox_mcp.client import ProxmoxClient
 from proxmox_mcp.config import ProxmoxConfig
 from proxmox_mcp.utils.errors import (
-    ProxmoxConnectionError,
-    AuthenticationError,
     VMNotFoundError,
     ProtectedResourceError,
     NodeNotAllowedError,
