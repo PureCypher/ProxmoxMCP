@@ -17,6 +17,10 @@ def mock_server_module():
     mock_mcp = MagicMock()
     # Make @mcp.tool() a pass-through decorator
     mock_mcp.tool.return_value = lambda f: f
+    # Make @mcp.resource() a pass-through decorator
+    mock_mcp.resource.return_value = lambda f: f
+    # Make @mcp.prompt() a pass-through decorator
+    mock_mcp.prompt.return_value = lambda f: f
 
     mock_server = MagicMock()
     mock_server.mcp = mock_mcp
@@ -28,3 +32,26 @@ def mock_server_module():
     yield mock_server
 
     # Don't remove -- other tests may have loaded the real module
+
+
+@pytest.fixture()
+def mock_config():
+    """Provide a mock ProxmoxConfig for tests that need configuration."""
+    config = MagicMock()
+    config.PROXMOX_HOST = "test-host"
+    config.PROXMOX_PORT = 8006
+    config.PROXMOX_VERIFY_SSL = False
+    config.PROXMOX_TOKEN_NAME = "test@pam!test"
+    config.PROXMOX_TOKEN_VALUE = "test-token-value"
+    config.PROXMOX_USER = None
+    config.PROXMOX_PASSWORD = None
+    config.PROXMOX_DRY_RUN = False
+    config.PROXMOX_ALLOWED_NODES = ""
+    config.PROXMOX_PROTECTED_VMIDS = ""
+    config.PROXMOX_MAX_CONCURRENT_TASKS = 5
+    config.MCP_TRANSPORT = "stdio"
+    config.MCP_HTTP_PORT = 3001
+    config.LOG_LEVEL = "INFO"
+    config.allowed_nodes = []
+    config.protected_vmids = []
+    return config
