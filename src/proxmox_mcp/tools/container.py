@@ -146,6 +146,7 @@ async def shutdown_container(vmid: int, node: str | None = None, timeout: int = 
     try:
         client = get_client()
         validate_vmid(vmid)
+        client.check_protected(vmid)
         node = await _resolve_node(client, vmid, node)
         if client.is_dry_run:
             return client.dry_run_response("shutdown_container", vmid=vmid, node=node)
@@ -169,6 +170,7 @@ async def reboot_container(vmid: int, node: str | None = None) -> dict:
     try:
         client = get_client()
         validate_vmid(vmid)
+        client.check_protected(vmid)
         node = await _resolve_node(client, vmid, node)
         if client.is_dry_run:
             return client.dry_run_response("reboot_container", vmid=vmid, node=node)
@@ -274,7 +276,7 @@ async def create_container(
         client = get_client()
         validate_node_name(node)
         client.validate_node(node)
-        if vmid:
+        if vmid is not None:
             validate_vmid(vmid)
         if client.is_dry_run:
             return client.dry_run_response("create_container", node=node, hostname=hostname)
@@ -295,7 +297,7 @@ async def create_container(
             "unprivileged": 1 if unprivileged else 0,
             "start": 1 if start_after_create else 0,
         }
-        if vmid:
+        if vmid is not None:
             kwargs["vmid"] = vmid
         if password:
             kwargs["password"] = password
@@ -377,6 +379,7 @@ async def modify_container_config(
     try:
         client = get_client()
         validate_vmid(vmid)
+        client.check_protected(vmid)
         node = await _resolve_node(client, vmid, node)
         if client.is_dry_run:
             return client.dry_run_response("modify_container_config", vmid=vmid, node=node)
@@ -396,7 +399,11 @@ async def modify_container_config(
         if tags is not None:
             kwargs["tags"] = tags
         if extra_config:
-            kwargs.update(json.loads(extra_config))
+            extra = json.loads(extra_config)
+            # Prevent overriding safety-relevant parameters
+            blocked_keys = {"vmid", "node", "digest"}
+            extra = {k: v for k, v in extra.items() if k not in blocked_keys}
+            kwargs.update(extra)
         if not kwargs:
             return {"status": "error", "error_type": "InvalidParameterError",
                     "message": "No configuration changes specified."}

@@ -206,8 +206,9 @@ async def list_backups(node: str, storage: str = "local", vmid: int | None = Non
         data = await client.api_call(
             client.api.nodes(node).storage(storage).content.get, **kwargs
         )
-        if vmid:
-            data = [b for b in data if str(vmid) in b.get("volid", "")]
+        if vmid is not None:
+            vmid_str = str(vmid)
+            data = [b for b in data if f"-{vmid_str}-" in b.get("volid", "") or b.get("volid", "").endswith(f"-{vmid_str}")]
         return {"status": "success", "node": node, "storage": storage, "backups": data, "total": len(data)}
     except Exception as e:
         return format_error_response(e)
@@ -242,7 +243,7 @@ async def restore_backup(
         if client.is_dry_run:
             return client.dry_run_response("restore_backup", archive=archive, vmid=vmid, node=node)
         # Detect type from archive name
-        if "lxc" in archive or "ct" in archive:
+        if archive.startswith("vzdump-lxc-") or "/vzdump-lxc-" in archive:
             kwargs = {"ostemplate": archive, "vmid": vmid, "storage": storage, "restore": 1}
             if force:
                 kwargs["force"] = 1
