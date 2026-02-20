@@ -26,6 +26,12 @@ class ProxmoxConfig(BaseSettings):
     PROXMOX_PROTECTED_VMIDS: str = ""
     PROXMOX_MAX_CONCURRENT_TASKS: int = 5
 
+    # SSH (for disk management tools)
+    PROXMOX_SSH_USER: str = "root"
+    PROXMOX_SSH_PORT: int = 22
+    PROXMOX_SSH_KEY_PATH: str | None = None
+    PROXMOX_SSH_PASSWORD: str | None = None
+
     # Server
     MCP_TRANSPORT: str = "stdio"
     MCP_HTTP_PORT: int = 3001
