@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-MCP (Model Context Protocol) server for Proxmox VE infrastructure management. Exposes 58 tools, 10 resources, and 6 prompts via FastMCP. Python 3.11+, async-first design wrapping the synchronous `proxmoxer` library with `asyncio.to_thread()`.
+MCP (Model Context Protocol) server for Proxmox VE infrastructure management. Exposes 91 tools, 10 resources, and 6 prompts via FastMCP. Python 3.11+, async-first design wrapping the synchronous `proxmoxer` library with `asyncio.to_thread()`.
 
 ## Commands
 
@@ -40,11 +40,12 @@ mypy src/proxmox_mcp           # Type check
 
 - **server.py** — Creates `mcp` (FastMCP) and `proxmox_client` (ProxmoxClient) at module level. Tool/resource/prompt modules import these and register via decorators. Side-effect imports at bottom of file register everything with mcp.
 - **config.py** — `ProxmoxConfig(BaseSettings)` loads from `.env`. Uses `model_validator` to parse comma-separated env vars into typed lists (protected_vmids, allowed_nodes).
-- **client.py** — `ProxmoxClient` wraps proxmoxer. Key safety methods: `check_protected()`, `validate_node()`, `resolve_node_for_vmid()`, `dry_run_response()`. All Proxmox API calls go through `api_call()` which runs sync proxmoxer in a thread.
-- **tools/** — 8 domain modules (cluster, node, vm, container, storage, task, backup, network). Each has local `get_mcp()`/`get_client()` helpers that import from `server.py`.
+- **client.py** — `ProxmoxClient` wraps proxmoxer. Key safety methods: `check_protected()`, `validate_node()`, `resolve_node()` (validates + auto-detects node for VMID), `dry_run_response()`. All Proxmox API calls go through `api_call()` which runs sync proxmoxer in a thread.
+- **tools/** — 9 domain modules (cluster, node, vm, container, storage, task, backup, network, disk). Each has local `get_mcp()`/`get_client()` helpers that import from `server.py`.
 - **resources/resources.py** — 10 read-only `proxmox://` URI resources returning JSON strings.
 - **prompts/prompts.py** — 6 workflow prompt templates.
-- **utils/** — `errors.py` (exception hierarchy), `validators.py` (validate_vmid, validate_node_name), `formatters.py` (format_vm_summary, format_bytes, etc.)
+- **utils/** — `errors.py` (exception hierarchy), `validators.py` (validate_vmid, validate_node_name), `sanitizers.py` (input sanitization for disk/shell params), `formatters.py` (format_vm_summary, format_bytes, etc.)
+- **ssh.py** — `SSHExecutor` for remote command execution via paramiko (used by disk tools).
 
 ### Conventions
 

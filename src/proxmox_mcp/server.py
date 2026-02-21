@@ -1,10 +1,12 @@
 """FastMCP server definition and entry point for Proxmox VE Manager."""
 
 import logging
+
 from mcp.server.fastmcp import FastMCP
 
-from proxmox_mcp.config import ProxmoxConfig
 from proxmox_mcp.client import ProxmoxClient
+from proxmox_mcp.config import ProxmoxConfig
+from proxmox_mcp.ssh import SSHExecutor
 
 # Initialize config and logging
 config = ProxmoxConfig()
@@ -27,15 +29,24 @@ mcp = FastMCP(
     ),
 )
 
-# Initialize Proxmox client
+# Initialize Proxmox client and SSH executor
 proxmox_client = ProxmoxClient(config)
+ssh_executor = SSHExecutor(config)
 
 # Import tool modules to register them with mcp
-from proxmox_mcp.tools import cluster, node, storage, task  # noqa: E402, F401
-from proxmox_mcp.tools import vm, container  # noqa: E402, F401
-from proxmox_mcp.tools import backup, network  # noqa: E402, F401
-from proxmox_mcp.resources import resources  # noqa: E402, F401
 from proxmox_mcp.prompts import prompts  # noqa: E402, F401
+from proxmox_mcp.resources import resources  # noqa: E402, F401
+from proxmox_mcp.tools import (  # noqa: E402, F401  # noqa: E402, F401  # noqa: E402, F401
+    backup,
+    cluster,
+    container,
+    disk,
+    network,
+    node,
+    storage,
+    task,
+    vm,
+)
 
 
 def main():

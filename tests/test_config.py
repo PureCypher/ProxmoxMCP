@@ -1,4 +1,6 @@
 import pytest
+from pydantic import ValidationError
+
 from proxmox_mcp.config import ProxmoxConfig
 
 
@@ -48,5 +50,5 @@ def test_config_empty_lists(monkeypatch):
 
 def test_config_requires_host(monkeypatch):
     monkeypatch.delenv("PROXMOX_HOST", raising=False)
-    with pytest.raises(Exception):
-        ProxmoxConfig()
+    with pytest.raises(ValidationError):
+        ProxmoxConfig(_env_file=None)

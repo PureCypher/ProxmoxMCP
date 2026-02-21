@@ -1,8 +1,9 @@
-"""Node-level read-only tools for Proxmox VE."""
+"""Node-level tools for Proxmox VE."""
 
 import logging
+
 from proxmox_mcp.utils.errors import format_error_response
-from proxmox_mcp.utils.formatters import format_bytes, format_uptime
+from proxmox_mcp.utils.formatters import format_bytes, format_task_result, format_uptime
 from proxmox_mcp.utils.validators import validate_node_name
 
 logger = logging.getLogger("proxmox-mcp")
@@ -10,11 +11,13 @@ logger = logging.getLogger("proxmox-mcp")
 
 def get_client():
     from proxmox_mcp.server import proxmox_client
+
     return proxmox_client
 
 
 def get_mcp():
     from proxmox_mcp.server import mcp
+
     return mcp
 
 
@@ -35,18 +38,20 @@ async def list_nodes() -> dict:
 
         nodes = []
         for node in data:
-            nodes.append({
-                "node": node.get("node"),
-                "status": node.get("status"),
-                "cpu_usage_percent": round(node.get("cpu", 0) * 100, 2),
-                "cpu_cores": node.get("maxcpu", 0),
-                "memory_used": format_bytes(node.get("mem", 0)),
-                "memory_total": format_bytes(node.get("maxmem", 0)),
-                "disk_used": format_bytes(node.get("disk", 0)),
-                "disk_total": format_bytes(node.get("maxdisk", 0)),
-                "uptime": format_uptime(node.get("uptime", 0)),
-                "uptime_seconds": node.get("uptime", 0),
-            })
+            nodes.append(
+                {
+                    "node": node.get("node"),
+                    "status": node.get("status"),
+                    "cpu_usage_percent": round(node.get("cpu", 0) * 100, 2),
+                    "cpu_cores": node.get("maxcpu", 0),
+                    "memory_used": format_bytes(node.get("mem", 0)),
+                    "memory_total": format_bytes(node.get("maxmem", 0)),
+                    "disk_used": format_bytes(node.get("disk", 0)),
+                    "disk_total": format_bytes(node.get("maxdisk", 0)),
+                    "uptime": format_uptime(node.get("uptime", 0)),
+                    "uptime_seconds": node.get("uptime", 0),
+                }
+            )
 
         return {
             "status": "success",
@@ -54,7 +59,7 @@ async def list_nodes() -> dict:
             "nodes": nodes,
         }
     except Exception as e:
-        logger.error(f"Failed to list nodes: {e}")
+        logger.error("Failed to list nodes: %s", e)
         return format_error_response(e)
 
 
@@ -71,7 +76,7 @@ async def get_node_status(node: str) -> dict:
         validate_node_name(node)
         client = get_client()
         client.validate_node(node)
-        logger.info(f"Fetching status for node '{node}'")
+        logger.info("Fetching status for node '%s'", node)
         data = await client.api_call(client.api.nodes(node).status.get)
 
         return {
@@ -80,7 +85,7 @@ async def get_node_status(node: str) -> dict:
             "data": data,
         }
     except Exception as e:
-        logger.error(f"Failed to get status for node '{node}': {e}")
+        logger.error("Failed to get status for node '%s': %s", node, e)
         return format_error_response(e)
 
 
@@ -97,7 +102,7 @@ async def get_node_services(node: str) -> dict:
         validate_node_name(node)
         client = get_client()
         client.validate_node(node)
-        logger.info(f"Fetching services for node '{node}'")
+        logger.info("Fetching services for node '%s'", node)
         data = await client.api_call(client.api.nodes(node).services.get)
 
         return {
@@ -107,7 +112,7 @@ async def get_node_services(node: str) -> dict:
             "services": data,
         }
     except Exception as e:
-        logger.error(f"Failed to get services for node '{node}': {e}")
+        logger.error("Failed to get services for node '%s': %s", node, e)
         return format_error_response(e)
 
 
@@ -124,7 +129,7 @@ async def get_node_network(node: str) -> dict:
         validate_node_name(node)
         client = get_client()
         client.validate_node(node)
-        logger.info(f"Fetching network config for node '{node}'")
+        logger.info("Fetching network config for node '%s'", node)
         data = await client.api_call(client.api.nodes(node).network.get)
 
         return {
@@ -134,7 +139,7 @@ async def get_node_network(node: str) -> dict:
             "interfaces": data,
         }
     except Exception as e:
-        logger.error(f"Failed to get network config for node '{node}': {e}")
+        logger.error("Failed to get network config for node '%s': %s", node, e)
         return format_error_response(e)
 
 
@@ -151,7 +156,7 @@ async def get_node_storage(node: str) -> dict:
         validate_node_name(node)
         client = get_client()
         client.validate_node(node)
-        logger.info(f"Fetching storage for node '{node}'")
+        logger.info("Fetching storage for node '%s'", node)
         data = await client.api_call(client.api.nodes(node).storage.get)
 
         return {
@@ -161,7 +166,7 @@ async def get_node_storage(node: str) -> dict:
             "storage": data,
         }
     except Exception as e:
-        logger.error(f"Failed to get storage for node '{node}': {e}")
+        logger.error("Failed to get storage for node '%s': %s", node, e)
         return format_error_response(e)
 
 
@@ -178,7 +183,7 @@ async def get_node_syslog(node: str, limit: int = 50, since: str | None = None) 
         validate_node_name(node)
         client = get_client()
         client.validate_node(node)
-        logger.info(f"Fetching syslog for node '{node}' (limit={limit}, since={since})")
+        logger.info("Fetching syslog for node '%s' (limit=%d, since=%s)", node, limit, since)
 
         kwargs = {"limit": limit}
         if since:
@@ -193,5 +198,72 @@ async def get_node_syslog(node: str, limit: int = 50, since: str | None = None) 
             "entries": data,
         }
     except Exception as e:
-        logger.error(f"Failed to get syslog for node '{node}': {e}")
+        logger.error("Failed to get syslog for node '%s': %s", node, e)
+        return format_error_response(e)
+
+
+@mcp.tool()
+async def reboot_node(node: str, confirm: bool = False) -> dict:
+    """Reboot a Proxmox node. Set confirm=True to execute.
+
+    Args:
+        node: The node name to reboot.
+        confirm: Must be True to execute.
+    """
+    try:
+        validate_node_name(node)
+        client = get_client()
+        client.validate_node(node)
+        if not confirm:
+            return {
+                "status": "confirmation_required",
+                "warning": (
+                    f"This will REBOOT node '{node}'. "
+                    f"All running VMs/CTs on this node will be affected."
+                ),
+                "action": "Call reboot_node again with confirm=True to proceed.",
+            }
+        if client.is_dry_run:
+            return client.dry_run_response("reboot_node", node=node)
+        logger.warning("Rebooting node '%s'", node)
+        upid = await client.api_call(
+            client.api.nodes(node).status.post, command="reboot"
+        )
+        return format_task_result({"data": upid})
+    except Exception as e:
+        logger.error("Failed to reboot node '%s': %s", node, e)
+        return format_error_response(e)
+
+
+@mcp.tool()
+async def shutdown_node(node: str, confirm: bool = False) -> dict:
+    """Shutdown a Proxmox node. Set confirm=True to execute.
+
+    Args:
+        node: The node name to shut down.
+        confirm: Must be True to execute.
+    """
+    try:
+        validate_node_name(node)
+        client = get_client()
+        client.validate_node(node)
+        if not confirm:
+            return {
+                "status": "confirmation_required",
+                "warning": (
+                    f"This will SHUT DOWN node '{node}'. "
+                    f"All running VMs/CTs on this node will be stopped. "
+                    f"Physical access may be needed to power it back on."
+                ),
+                "action": "Call shutdown_node again with confirm=True to proceed.",
+            }
+        if client.is_dry_run:
+            return client.dry_run_response("shutdown_node", node=node)
+        logger.warning("Shutting down node '%s'", node)
+        upid = await client.api_call(
+            client.api.nodes(node).status.post, command="shutdown"
+        )
+        return format_task_result({"data": upid})
+    except Exception as e:
+        logger.error("Failed to shut down node '%s': %s", node, e)
         return format_error_response(e)

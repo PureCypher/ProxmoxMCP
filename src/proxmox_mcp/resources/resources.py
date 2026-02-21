@@ -3,18 +3,21 @@
 
 import json
 import logging
-from proxmox_mcp.utils.formatters import format_vm_summary, format_container_summary
+
+from proxmox_mcp.utils.formatters import format_container_summary, format_vm_summary
 
 logger = logging.getLogger("proxmox-mcp")
 
 
 def get_client():
     from proxmox_mcp.server import proxmox_client
+
     return proxmox_client
 
 
 def get_mcp():
     from proxmox_mcp.server import mcp
+
     return mcp
 
 

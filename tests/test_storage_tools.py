@@ -1,7 +1,8 @@
 """Tests for storage tools."""
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
 
 
 @pytest.fixture
@@ -14,6 +15,7 @@ def mock_client():
 
 
 # --- list_storage ---
+
 
 @pytest.mark.asyncio
 async def test_list_storage(mock_client):
@@ -76,6 +78,7 @@ async def test_list_storage_error(mock_client):
 
 # --- get_storage_status ---
 
+
 @pytest.mark.asyncio
 async def test_get_storage_status(mock_client):
     from proxmox_mcp.tools.storage import get_storage_status
@@ -114,6 +117,7 @@ async def test_get_storage_status_error(mock_client):
 
 
 # --- list_storage_content ---
+
 
 @pytest.mark.asyncio
 async def test_list_storage_content(mock_client):
@@ -174,6 +178,7 @@ async def test_list_storage_content_error(mock_client):
 
 # --- get_available_isos ---
 
+
 @pytest.mark.asyncio
 async def test_get_available_isos(mock_client):
     from proxmox_mcp.tools.storage import get_available_isos
@@ -206,6 +211,7 @@ async def test_get_available_isos_custom_storage(mock_client):
 
 
 # --- get_available_templates ---
+
 
 @pytest.mark.asyncio
 async def test_get_available_templates(mock_client):
@@ -243,3 +249,61 @@ async def test_get_available_templates_error(mock_client):
         result = await get_available_templates("pve1")
 
     assert result["status"] == "error"
+
+
+# --- download_to_storage ---
+
+
+@pytest.mark.asyncio
+async def test_download_to_storage(mock_client):
+    from proxmox_mcp.tools.storage import download_to_storage
+
+    mock_client.api_call.return_value = "UPID:pve1:00001:download"
+    mock_client.is_dry_run = False
+
+    with patch("proxmox_mcp.tools.storage.get_client", return_value=mock_client):
+        result = await download_to_storage(
+            node="pve1",
+            storage="local",
+            url="https://example.com/ubuntu.iso",
+            content="iso",
+            filename="ubuntu.iso",
+        )
+
+    assert result["status"] == "submitted"
+
+
+@pytest.mark.asyncio
+async def test_download_to_storage_invalid_content(mock_client):
+    from proxmox_mcp.tools.storage import download_to_storage
+
+    with patch("proxmox_mcp.tools.storage.get_client", return_value=mock_client):
+        result = await download_to_storage(
+            node="pve1",
+            storage="local",
+            url="https://example.com/file.tar",
+            content="backup",
+            filename="file.tar",
+        )
+
+    assert result["status"] == "error"
+    assert "iso" in result["message"]
+
+
+@pytest.mark.asyncio
+async def test_download_to_storage_dry_run(mock_client):
+    from proxmox_mcp.tools.storage import download_to_storage
+
+    mock_client.is_dry_run = True
+    mock_client.dry_run_response.return_value = {"status": "dry_run"}
+
+    with patch("proxmox_mcp.tools.storage.get_client", return_value=mock_client):
+        result = await download_to_storage(
+            node="pve1",
+            storage="local",
+            url="https://example.com/ubuntu.iso",
+            content="iso",
+            filename="ubuntu.iso",
+        )
+
+    assert result["status"] == "dry_run"

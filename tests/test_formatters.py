@@ -1,17 +1,25 @@
 from proxmox_mcp.utils.formatters import (
-    format_vm_summary,
-    format_container_summary,
     format_bytes,
-    format_uptime,
+    format_container_summary,
     format_task_result,
+    format_uptime,
+    format_vm_summary,
 )
 
 
 def test_format_vm_summary():
     raw = {
-        "vmid": 100, "name": "test-vm", "status": "running", "node": "pve1",
-        "maxcpu": 4, "maxmem": 4294967296, "mem": 2147483648,
-        "maxdisk": 34359738368, "uptime": 90061, "cpu": 0.156, "tags": "web;prod",
+        "vmid": 100,
+        "name": "test-vm",
+        "status": "running",
+        "node": "pve1",
+        "maxcpu": 4,
+        "maxmem": 4294967296,
+        "mem": 2147483648,
+        "maxdisk": 34359738368,
+        "uptime": 90061,
+        "cpu": 0.156,
+        "tags": "web;prod",
     }
     result = format_vm_summary(raw)
     assert result["vmid"] == 100
@@ -27,9 +35,16 @@ def test_format_vm_summary():
 
 def test_format_container_summary():
     raw = {
-        "vmid": 200, "name": "ct-test", "status": "stopped", "node": "pve2",
-        "maxcpu": 2, "maxmem": 1073741824, "mem": 0, "maxdisk": 8589934592,
-        "uptime": 0, "cpu": 0,
+        "vmid": 200,
+        "name": "ct-test",
+        "status": "stopped",
+        "node": "pve2",
+        "maxcpu": 2,
+        "maxmem": 1073741824,
+        "mem": 0,
+        "maxdisk": 8589934592,
+        "uptime": 0,
+        "cpu": 0,
     }
     result = format_container_summary(raw)
     assert result["type"] == "lxc"

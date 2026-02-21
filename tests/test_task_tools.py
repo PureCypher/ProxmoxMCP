@@ -1,7 +1,8 @@
 """Tests for task tracking tools."""
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
 
 
 @pytest.fixture
@@ -14,6 +15,7 @@ def mock_client():
 
 
 # --- list_tasks ---
+
 
 @pytest.mark.asyncio
 async def test_list_tasks_single_node(mock_client):
@@ -137,6 +139,7 @@ async def test_list_tasks_error(mock_client):
 
 # --- get_task_status ---
 
+
 @pytest.mark.asyncio
 async def test_get_task_status(mock_client):
     from proxmox_mcp.tools.task import get_task_status
@@ -191,6 +194,7 @@ async def test_get_task_status_error(mock_client):
 
 # --- get_task_log ---
 
+
 @pytest.mark.asyncio
 async def test_get_task_log(mock_client):
     from proxmox_mcp.tools.task import get_task_log
@@ -237,6 +241,7 @@ async def test_get_task_log_error(mock_client):
 
 
 # --- wait_for_task ---
+
 
 @pytest.mark.asyncio
 async def test_wait_for_task_immediate_complete(mock_client):

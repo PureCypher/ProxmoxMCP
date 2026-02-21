@@ -2,32 +2,42 @@
 
 import json
 import logging
+
 from proxmox_mcp.utils.errors import format_error_response
-from proxmox_mcp.utils.validators import validate_vmid, validate_node_name
 from proxmox_mcp.utils.formatters import format_container_summary, format_task_result
+from proxmox_mcp.utils.validators import validate_node_name, validate_vmid
 
 logger = logging.getLogger("proxmox-mcp")
+
+# Allowlist of container config keys safe to modify via extra_config.
+CT_SAFE_CONFIG_KEYS = frozenset({
+    # Resources
+    "memory", "swap", "cores", "cpulimit", "cpuunits",
+    # Identity
+    "hostname", "description", "tags", "onboot", "startup", "protection",
+    # Storage
+    "rootfs", "mp0", "mp1", "mp2", "mp3",
+    # Network
+    "net0", "net1", "net2", "net3",
+    "nameserver", "searchdomain",
+    # OS
+    "ostype", "arch", "unprivileged", "features",
+})
 
 
 def get_client():
     from proxmox_mcp.server import proxmox_client
+
     return proxmox_client
 
 
 def get_mcp():
     from proxmox_mcp.server import mcp
+
     return mcp
 
 
 mcp = get_mcp()
-
-
-async def _resolve_node(client, vmid: int, node: str | None) -> str:
-    if node:
-        validate_node_name(node)
-        client.validate_node(node)
-        return node
-    return await client.resolve_node_for_vmid(vmid)
 
 
 @mcp.tool()
@@ -66,11 +76,13 @@ async def get_container_status(vmid: int, node: str | None = None) -> dict:
     try:
         client = get_client()
         validate_vmid(vmid)
-        node = await _resolve_node(client, vmid, node)
+        node = await client.resolve_node(vmid, node)
         data = await client.api_call(client.api.nodes(node).lxc(vmid).status.current.get)
         return {"status": "success", "vmid": vmid, "node": node, "data": data}
     except Exception as e:
-        return format_error_response(e, suggestion="Use list_containers to see available containers.")
+        return format_error_response(
+            e, suggestion="Use list_containers to see available containers."
+        )
 
 
 @mcp.tool()
@@ -84,7 +96,7 @@ async def get_container_config(vmid: int, node: str | None = None) -> dict:
     try:
         client = get_client()
         validate_vmid(vmid)
-        node = await _resolve_node(client, vmid, node)
+        node = await client.resolve_node(vmid, node)
         data = await client.api_call(client.api.nodes(node).lxc(vmid).config.get)
         return {"status": "success", "vmid": vmid, "node": node, "config": data}
     except Exception as e:
@@ -102,7 +114,7 @@ async def start_container(vmid: int, node: str | None = None) -> dict:
     try:
         client = get_client()
         validate_vmid(vmid)
-        node = await _resolve_node(client, vmid, node)
+        node = await client.resolve_node(vmid, node)
         if client.is_dry_run:
             return client.dry_run_response("start_container", vmid=vmid, node=node)
         logger.info("Starting container %d on %s", vmid, node)
@@ -124,7 +136,7 @@ async def stop_container(vmid: int, node: str | None = None) -> dict:
         client = get_client()
         validate_vmid(vmid)
         client.check_protected(vmid)
-        node = await _resolve_node(client, vmid, node)
+        node = await client.resolve_node(vmid, node)
         if client.is_dry_run:
             return client.dry_run_response("stop_container", vmid=vmid, node=node)
         logger.warning("Stopping container %d on %s", vmid, node)
@@ -147,7 +159,7 @@ async def shutdown_container(vmid: int, node: str | None = None, timeout: int = 
         client = get_client()
         validate_vmid(vmid)
         client.check_protected(vmid)
-        node = await _resolve_node(client, vmid, node)
+        node = await client.resolve_node(vmid, node)
         if client.is_dry_run:
             return client.dry_run_response("shutdown_container", vmid=vmid, node=node)
         logger.info("Graceful shutdown of container %d on %s", vmid, node)
@@ -171,7 +183,7 @@ async def reboot_container(vmid: int, node: str | None = None) -> dict:
         client = get_client()
         validate_vmid(vmid)
         client.check_protected(vmid)
-        node = await _resolve_node(client, vmid, node)
+        node = await client.resolve_node(vmid, node)
         if client.is_dry_run:
             return client.dry_run_response("reboot_container", vmid=vmid, node=node)
         logger.info("Rebooting container %d on %s", vmid, node)
@@ -183,8 +195,12 @@ async def reboot_container(vmid: int, node: str | None = None) -> dict:
 
 @mcp.tool()
 async def clone_container(
-    vmid: int, newid: int, name: str, node: str | None = None,
-    full: bool = True, target_node: str | None = None,
+    vmid: int,
+    newid: int,
+    name: str,
+    node: str | None = None,
+    full: bool = True,
+    target_node: str | None = None,
 ) -> dict:
     """Clone an LXC container.
 
@@ -200,7 +216,7 @@ async def clone_container(
         client = get_client()
         validate_vmid(vmid)
         validate_vmid(newid)
-        node = await _resolve_node(client, vmid, node)
+        node = await client.resolve_node(vmid, node)
         if client.is_dry_run:
             return client.dry_run_response("clone_container", vmid=vmid, newid=newid, name=name)
         kwargs = {"newid": newid, "hostname": name, "full": 1 if full else 0}
@@ -215,8 +231,11 @@ async def clone_container(
 
 @mcp.tool()
 async def migrate_container(
-    vmid: int, target_node: str, node: str | None = None,
-    online: bool = False, restart: bool = True,
+    vmid: int,
+    target_node: str,
+    node: str | None = None,
+    online: bool = False,
+    restart: bool = True,
 ) -> dict:
     """Migrate an LXC container to another node.
 
@@ -230,13 +249,15 @@ async def migrate_container(
     try:
         client = get_client()
         validate_vmid(vmid)
-        node = await _resolve_node(client, vmid, node)
+        node = await client.resolve_node(vmid, node)
         if client.is_dry_run:
             return client.dry_run_response("migrate_container", vmid=vmid, target=target_node)
         logger.info("Migrating container %d from %s to %s", vmid, node, target_node)
         upid = await client.api_call(
             client.api.nodes(node).lxc(vmid).migrate.post,
-            target=target_node, online=1 if online else 0, restart=1 if restart else 0,
+            target=target_node,
+            online=1 if online else 0,
+            restart=1 if restart else 0,
         )
         return format_task_result({"data": upid})
     except Exception as e:
@@ -245,12 +266,20 @@ async def migrate_container(
 
 @mcp.tool()
 async def create_container(
-    node: str, ostemplate: str, hostname: str,
-    vmid: int | None = None, password: str | None = None,
-    ssh_public_keys: str | None = None, memory: int = 512,
-    swap: int = 512, cores: int = 1, rootfs_size: str = "8",
-    storage: str = "local-lvm", net_bridge: str = "vmbr0",
-    ip_config: str = "dhcp", unprivileged: bool = True,
+    node: str,
+    ostemplate: str,
+    hostname: str,
+    vmid: int | None = None,
+    password: str | None = None,
+    ssh_public_keys: str | None = None,
+    memory: int = 512,
+    swap: int = 512,
+    cores: int = 1,
+    rootfs_size: str = "8",
+    storage: str = "local-lvm",
+    net_bridge: str = "vmbr0",
+    ip_config: str = "dhcp",
+    unprivileged: bool = True,
     start_after_create: bool = False,
 ) -> dict:
     """Create a new LXC container.
@@ -312,8 +341,11 @@ async def create_container(
 
 @mcp.tool()
 async def delete_container(
-    vmid: int, node: str | None = None, purge: bool = True,
-    force: bool = False, confirm: bool = False,
+    vmid: int,
+    node: str | None = None,
+    purge: bool = True,
+    force: bool = False,
+    confirm: bool = False,
 ) -> dict:
     """Permanently delete an LXC container. Set confirm=True to execute.
 
@@ -328,14 +360,14 @@ async def delete_container(
         client = get_client()
         validate_vmid(vmid)
         client.check_protected(vmid)
-        node = await _resolve_node(client, vmid, node)
+        node = await client.resolve_node(vmid, node)
         if not confirm:
             ct_data = await client.api_call(client.api.nodes(node).lxc(vmid).status.current.get)
             return {
                 "status": "confirmation_required",
                 "warning": (
-                    f"This will PERMANENTLY DELETE container {vmid} ({ct_data.get('name', 'unnamed')}). "
-                    f"This cannot be undone."
+                    f"This will PERMANENTLY DELETE container {vmid} "
+                    f"({ct_data.get('name', 'unnamed')}). This cannot be undone."
                 ),
                 "action": "Call delete_container again with confirm=True to proceed.",
                 "container_info": {"vmid": vmid, "name": ct_data.get("name"), "node": node},
@@ -356,11 +388,16 @@ async def delete_container(
 
 @mcp.tool()
 async def modify_container_config(
-    vmid: int, node: str | None = None,
-    memory: int | None = None, swap: int | None = None,
-    cores: int | None = None, hostname: str | None = None,
-    description: str | None = None, onboot: bool | None = None,
-    tags: str | None = None, extra_config: str | None = None,
+    vmid: int,
+    node: str | None = None,
+    memory: int | None = None,
+    swap: int | None = None,
+    cores: int | None = None,
+    hostname: str | None = None,
+    description: str | None = None,
+    onboot: bool | None = None,
+    tags: str | None = None,
+    extra_config: str | None = None,
 ) -> dict:
     """Modify LXC container configuration.
 
@@ -380,7 +417,7 @@ async def modify_container_config(
         client = get_client()
         validate_vmid(vmid)
         client.check_protected(vmid)
-        node = await _resolve_node(client, vmid, node)
+        node = await client.resolve_node(vmid, node)
         if client.is_dry_run:
             return client.dry_run_response("modify_container_config", vmid=vmid, node=node)
         kwargs = {}
@@ -400,13 +437,21 @@ async def modify_container_config(
             kwargs["tags"] = tags
         if extra_config:
             extra = json.loads(extra_config)
-            # Prevent overriding safety-relevant parameters
-            blocked_keys = {"vmid", "node", "digest"}
-            extra = {k: v for k, v in extra.items() if k not in blocked_keys}
+            unsafe_keys = [k for k in extra if k not in CT_SAFE_CONFIG_KEYS]
+            if unsafe_keys:
+                return format_error_response(
+                    Exception(
+                        f"Keys not in allowlist: {unsafe_keys}. "
+                        f"Modifying these keys is restricted for safety."
+                    )
+                )
             kwargs.update(extra)
         if not kwargs:
-            return {"status": "error", "error_type": "InvalidParameterError",
-                    "message": "No configuration changes specified."}
+            return {
+                "status": "error",
+                "error_type": "InvalidParameterError",
+                "message": "No configuration changes specified.",
+            }
         logger.info("Modifying container %d config: %s", vmid, list(kwargs.keys()))
         await client.api_call(client.api.nodes(node).lxc(vmid).config.put, **kwargs)
         return {"status": "success", "vmid": vmid, "node": node, "changes": list(kwargs.keys())}
