@@ -48,7 +48,6 @@ def mock_config():
     config.PROXMOX_DRY_RUN = False
     config.PROXMOX_ALLOWED_NODES = ""
     config.PROXMOX_PROTECTED_VMIDS = ""
-    config.PROXMOX_MAX_CONCURRENT_TASKS = 5
     config.MCP_TRANSPORT = "stdio"
     config.MCP_HTTP_PORT = 3001
     config.LOG_LEVEL = "INFO"

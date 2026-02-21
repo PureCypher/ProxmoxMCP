@@ -1,7 +1,8 @@
 """Tests for container tools."""
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
 
 
 @pytest.fixture
@@ -13,6 +14,7 @@ def mock_client():
         client.config.PROXMOX_DRY_RUN = False
         client.is_dry_run = False
         client.resolve_node_for_vmid = AsyncMock(return_value="pve1")
+        client.resolve_node = AsyncMock(return_value="pve1")
         mock_get.return_value = client
         yield client
 
@@ -91,3 +93,25 @@ async def test_create_container(mock_client):
         node="pve1", ostemplate="local:vztmpl/ubuntu-22.04.tar.zst", hostname="test-ct"
     )
     assert result["status"] == "submitted"
+
+
+@pytest.mark.asyncio
+async def test_modify_container_config_blocks_hookscript(mock_client):
+    from proxmox_mcp.tools.container import modify_container_config
+
+    result = await modify_container_config(
+        vmid=200, extra_config='{"hookscript": "local:snippets/evil.sh"}'
+    )
+    assert result["status"] == "error"
+    assert "hookscript" in result["message"]
+
+
+@pytest.mark.asyncio
+async def test_modify_container_config_allows_safe_keys(mock_client):
+    from proxmox_mcp.tools.container import modify_container_config
+
+    mock_client.api_call = AsyncMock(return_value=None)
+    result = await modify_container_config(
+        vmid=200, extra_config='{"memory": 1024, "cores": 2}'
+    )
+    assert result["status"] == "success"

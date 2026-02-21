@@ -59,5 +59,8 @@ def format_task_result(task_data: dict) -> dict:
     return {
         "task_upid": task_data.get("upid") or task_data.get("data"),
         "status": "submitted",
-        "message": "Task submitted successfully. Use get_task_status with the UPID to track progress.",
+        "message": (
+            "Task submitted successfully. "
+            "Use get_task_status with the UPID to track progress."
+        ),
     }

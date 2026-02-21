@@ -2,16 +2,18 @@
 
 import asyncio
 import logging
+
 from proxmoxer import ProxmoxAPI
 
 from proxmox_mcp.config import ProxmoxConfig
 from proxmox_mcp.utils.errors import (
-    ProxmoxConnectionError,
     AuthenticationError,
-    VMNotFoundError,
-    ProtectedResourceError,
     NodeNotAllowedError,
+    ProtectedResourceError,
+    ProxmoxConnectionError,
+    VMNotFoundError,
 )
+from proxmox_mcp.utils.validators import validate_node_name
 
 logger = logging.getLogger("proxmox-mcp")
 
@@ -34,14 +36,24 @@ class ProxmoxClient:
             "timeout": 30,
         }
         if config.PROXMOX_TOKEN_NAME and config.PROXMOX_TOKEN_VALUE:
-            kwargs["token_name"] = config.PROXMOX_TOKEN_NAME
+            # proxmoxer expects user and token_name as separate params.
+            # Support both "user@realm!tokenid" and plain "tokenid" formats.
+            token_name = config.PROXMOX_TOKEN_NAME
+            if "!" in token_name:
+                user, token_id = token_name.split("!", 1)
+                kwargs["user"] = user
+                kwargs["token_name"] = token_id
+            else:
+                kwargs["user"] = config.PROXMOX_USER or ""
+                kwargs["token_name"] = token_name
             kwargs["token_value"] = config.PROXMOX_TOKEN_VALUE
         elif config.PROXMOX_USER and config.PROXMOX_PASSWORD:
             kwargs["user"] = config.PROXMOX_USER
             kwargs["password"] = config.PROXMOX_PASSWORD
         else:
             raise AuthenticationError(
-                "No authentication configured. Set PROXMOX_TOKEN_NAME/VALUE or PROXMOX_USER/PASSWORD."
+                "No authentication configured. "
+                "Set PROXMOX_TOKEN_NAME/VALUE or PROXMOX_USER/PASSWORD."
             )
         try:
             return ProxmoxAPI(**kwargs)
@@ -101,8 +113,22 @@ class ProxmoxClient:
             "status": "dry_run",
             "action": action,
             "params": params,
-            "message": "DRY RUN: This action was NOT executed. Set PROXMOX_DRY_RUN=false to perform.",
+            "message": (
+                "DRY RUN: This action was NOT executed. "
+                "Set PROXMOX_DRY_RUN=false to perform."
+            ),
         }
+
+    async def resolve_node(self, vmid: int, node: str | None) -> str:
+        """Resolve and validate a node for a VMID.
+
+        If node is provided, validate it. Otherwise auto-detect from cluster resources.
+        """
+        if node:
+            validate_node_name(node)
+            self.validate_node(node)
+            return node
+        return await self.resolve_node_for_vmid(vmid)
 
     @property
     def is_dry_run(self) -> bool:

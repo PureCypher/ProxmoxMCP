@@ -12,9 +12,10 @@ from proxmox_mcp.utils.sanitizers import (
     validate_mount_options,
     validate_mount_path,
     validate_partition_table,
+    validate_snapname,
     validate_storage_id,
+    validate_uuid,
 )
-
 
 # --- check_shell_injection ---
 
@@ -216,3 +217,61 @@ class TestPartitionTable:
     def test_rejects_invalid(self):
         with pytest.raises(InvalidParameterError):
             validate_partition_table("mbr")
+
+
+# --- validate_snapname ---
+
+
+class TestSnapname:
+    def test_valid_names(self):
+        validate_snapname("snap1")
+        validate_snapname("my-snap.v2")
+        validate_snapname("A_long_name")
+        validate_snapname("before-upgrade")
+
+    def test_rejects_starting_with_digit(self):
+        with pytest.raises(InvalidParameterError):
+            validate_snapname("1snap")
+
+    def test_rejects_special_chars(self):
+        with pytest.raises(InvalidParameterError):
+            validate_snapname("snap name")
+
+    def test_rejects_shell_injection(self):
+        with pytest.raises(InvalidParameterError):
+            validate_snapname("snap;rm -rf /")
+
+    def test_rejects_empty(self):
+        with pytest.raises(InvalidParameterError):
+            validate_snapname("")
+
+
+# --- validate_uuid ---
+
+
+class TestUUID:
+    def test_valid_uuid(self):
+        assert validate_uuid("550e8400-e29b-41d4-a716-446655440000") == (
+            "550e8400-e29b-41d4-a716-446655440000"
+        )
+
+    def test_valid_uuid_uppercase(self):
+        assert validate_uuid("550E8400-E29B-41D4-A716-446655440000") == (
+            "550E8400-E29B-41D4-A716-446655440000"
+        )
+
+    def test_rejects_empty(self):
+        with pytest.raises(InvalidParameterError):
+            validate_uuid("")
+
+    def test_rejects_shell_injection(self):
+        with pytest.raises(InvalidParameterError):
+            validate_uuid("'; rm -rf /; echo '")
+
+    def test_rejects_wrong_format(self):
+        with pytest.raises(InvalidParameterError):
+            validate_uuid("not-a-uuid")
+
+    def test_rejects_too_short(self):
+        with pytest.raises(InvalidParameterError):
+            validate_uuid("550e8400-e29b-41d4-a716")

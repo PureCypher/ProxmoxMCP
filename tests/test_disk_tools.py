@@ -1,7 +1,8 @@
 """Tests for physical disk management tools."""
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
 
 from proxmox_mcp.ssh import SSHResult
 
@@ -268,9 +269,8 @@ class TestPartitionDisk:
             SSHResult(exit_code=1, stdout="", stderr=""),  # zpool
             SSHResult(exit_code=1, stdout="", stderr=""),  # mdstat
             SSHResult(exit_code=0, stdout="", stderr=""),  # wipefs
-            SSHResult(exit_code=0, stdout="", stderr=""),  # parted mklabel
-            SSHResult(exit_code=0, stdout="", stderr=""),  # parted mkpart
-            SSHResult(exit_code=0, stdout="", stderr=""),  # partprobe
+            SSHResult(exit_code=0, stdout="", stderr=""),  # sgdisk (GPT + partition)
+            SSHResult(exit_code=0, stdout="", stderr=""),  # blockdev --rereadpt
             SSHResult(exit_code=0, stdout="", stderr=""),  # mkfs.ext4
             SSHResult(  # blkid
                 exit_code=0,
@@ -464,7 +464,7 @@ class TestCreateMountPoint:
             SSHResult(exit_code=0, stdout="exists", stderr=""),  # test -b
             SSHResult(  # blkid
                 exit_code=0,
-                stdout="TYPE=ext4\nUUID=1234\n",
+                stdout="TYPE=ext4\nUUID=aabbccdd-1122-3344-5566-778899aabbcc\n",
                 stderr="",
             ),
             SSHResult(exit_code=0, stdout="/mnt/data", stderr=""),  # findmnt (already mounted!)
@@ -487,7 +487,7 @@ class TestCreateMountPoint:
             SSHResult(exit_code=0, stdout="exists", stderr=""),  # test -b
             SSHResult(  # blkid
                 exit_code=0,
-                stdout="TYPE=ext4\nUUID=1234\n",
+                stdout="TYPE=ext4\nUUID=aabbccdd-1122-3344-5566-778899aabbcc\n",
                 stderr="",
             ),
             SSHResult(exit_code=1, stdout="", stderr=""),  # findmnt (not mounted)

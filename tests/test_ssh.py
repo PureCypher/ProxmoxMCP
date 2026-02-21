@@ -1,7 +1,9 @@
 """Tests for SSH execution module."""
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import paramiko
+import pytest
 
 from proxmox_mcp.ssh import SSHExecutor, SSHResult
 from proxmox_mcp.utils.errors import SSHExecutionError
@@ -15,6 +17,9 @@ def mock_config():
     config.PROXMOX_SSH_USER = "root"
     config.PROXMOX_SSH_KEY_PATH = None
     config.PROXMOX_SSH_PASSWORD = "testpass"
+    config.PROXMOX_PASSWORD = None
+    config.PROXMOX_SSH_HOST_KEY_CHECKING = False
+    config.PROXMOX_SSH_KNOWN_HOSTS = ""
     return config
 
 
@@ -129,3 +134,69 @@ class TestSSHExecutor:
 
     def test_timeout_capped_at_max(self, mock_config):
         SSHExecutor(mock_config)  # Verifies construction succeeds
+
+
+class TestSSHHostKeyVerification:
+    @patch("proxmox_mcp.ssh.paramiko.SSHClient")
+    def test_reject_policy_when_checking_enabled(self, mock_ssh_class, mock_config):
+        mock_config.PROXMOX_SSH_HOST_KEY_CHECKING = True
+        mock_config.PROXMOX_SSH_KNOWN_HOSTS = ""
+        mock_client = MagicMock()
+        mock_ssh_class.return_value = mock_client
+
+        # Simulate reject policy raising on unknown host
+        mock_client.connect.side_effect = paramiko.SSHException("Unknown host key")
+
+        executor = SSHExecutor(mock_config)
+        with pytest.raises(SSHExecutionError, match="SSH connection"):
+            executor._execute_sync("192.168.1.100", "echo hello")
+
+        mock_client.set_missing_host_key_policy.assert_called_once()
+        policy_arg = mock_client.set_missing_host_key_policy.call_args[0][0]
+        assert isinstance(policy_arg, paramiko.RejectPolicy)
+
+    @patch("proxmox_mcp.ssh.os.path.exists", return_value=True)
+    @patch("proxmox_mcp.ssh.paramiko.SSHClient")
+    def test_loads_custom_known_hosts_file(self, mock_ssh_class, mock_exists, mock_config):
+        mock_config.PROXMOX_SSH_HOST_KEY_CHECKING = True
+        mock_config.PROXMOX_SSH_KNOWN_HOSTS = "/custom/known_hosts"
+        mock_client = MagicMock()
+        mock_ssh_class.return_value = mock_client
+        mock_client.connect.side_effect = Exception("test")
+
+        executor = SSHExecutor(mock_config)
+        with pytest.raises(SSHExecutionError):
+            executor._execute_sync("192.168.1.100", "echo hello")
+
+        mock_client.load_host_keys.assert_called_once_with("/custom/known_hosts")
+
+    @patch("proxmox_mcp.ssh.paramiko.SSHClient")
+    def test_warning_policy_when_checking_disabled(self, mock_ssh_class, mock_config):
+        mock_config.PROXMOX_SSH_HOST_KEY_CHECKING = False
+        mock_client = MagicMock()
+        mock_ssh_class.return_value = mock_client
+        mock_client.connect.side_effect = Exception("test")
+
+        executor = SSHExecutor(mock_config)
+        with pytest.raises(SSHExecutionError):
+            executor._execute_sync("192.168.1.100", "echo hello")
+
+        policy_arg = mock_client.set_missing_host_key_policy.call_args[0][0]
+        assert isinstance(policy_arg, paramiko.WarningPolicy)
+
+    @patch("proxmox_mcp.ssh.os.path.exists", return_value=True)
+    @patch("proxmox_mcp.ssh.paramiko.SSHClient")
+    def test_default_known_hosts_path(self, mock_ssh_class, mock_exists, mock_config):
+        mock_config.PROXMOX_SSH_HOST_KEY_CHECKING = True
+        mock_config.PROXMOX_SSH_KNOWN_HOSTS = ""  # Empty = use default
+        mock_client = MagicMock()
+        mock_ssh_class.return_value = mock_client
+        mock_client.connect.side_effect = Exception("test")
+
+        executor = SSHExecutor(mock_config)
+        with pytest.raises(SSHExecutionError):
+            executor._execute_sync("192.168.1.100", "echo hello")
+
+        # Should load from ~/.ssh/known_hosts
+        loaded_path = mock_client.load_host_keys.call_args[0][0]
+        assert loaded_path.endswith(".ssh/known_hosts")

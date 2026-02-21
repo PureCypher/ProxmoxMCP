@@ -2,7 +2,8 @@
 
 import asyncio
 import logging
-from proxmox_mcp.utils.errors import format_error_response, TaskTimeoutError
+
+from proxmox_mcp.utils.errors import TaskTimeoutError, format_error_response
 from proxmox_mcp.utils.validators import validate_node_name
 
 logger = logging.getLogger("proxmox-mcp")
@@ -42,10 +43,10 @@ async def list_tasks(
         if node:
             validate_node_name(node)
             client.validate_node(node)
-            logger.info(f"Listing tasks for node '{node}' (limit={limit})")
+            logger.info("Listing tasks for node '%s' (limit=%d)", node, limit)
             data = await client.api_call(client.api.nodes(node).tasks.get, limit=limit)
         else:
-            logger.info(f"Listing tasks across all nodes (limit={limit})")
+            logger.info("Listing tasks across all nodes (limit=%d)", limit)
             # Get all nodes, then query tasks from each
             nodes_data = await client.api_call(client.api.nodes.get)
             data = []
@@ -57,7 +58,7 @@ async def list_tasks(
                     )
                     data.extend(node_tasks)
                 except Exception as e:
-                    logger.warning(f"Failed to get tasks from node '{node_name}': {e}")
+                    logger.warning("Failed to get tasks from node '%s': %s", node_name, e)
 
         # Apply status filter if provided
         if status_filter:
@@ -84,7 +85,7 @@ async def list_tasks(
             "tasks": data,
         }
     except Exception as e:
-        logger.error(f"Failed to list tasks: {e}")
+        logger.error("Failed to list tasks: %s", e)
         return format_error_response(e)
 
 
@@ -100,7 +101,7 @@ async def get_task_status(node: str, upid: str) -> dict:
         validate_node_name(node)
         client = get_client()
         client.validate_node(node)
-        logger.info(f"Fetching task status for UPID '{upid}' on node '{node}'")
+        logger.info("Fetching task status for UPID '%s' on node '%s'", upid, node)
         data = await client.api_call(client.api.nodes(node).tasks(upid).status.get)
 
         return {
@@ -110,7 +111,7 @@ async def get_task_status(node: str, upid: str) -> dict:
             "task_status": data,
         }
     except Exception as e:
-        logger.error(f"Failed to get task status for '{upid}': {e}")
+        logger.error("Failed to get task status for '%s': %s", upid, e)
         return format_error_response(e)
 
 
@@ -127,7 +128,7 @@ async def get_task_log(node: str, upid: str, limit: int = 100) -> dict:
         validate_node_name(node)
         client = get_client()
         client.validate_node(node)
-        logger.info(f"Fetching task log for UPID '{upid}' on node '{node}'")
+        logger.info("Fetching task log for UPID '%s' on node '%s'", upid, node)
         data = await client.api_call(client.api.nodes(node).tasks(upid).log.get, limit=limit)
 
         return {
@@ -138,7 +139,7 @@ async def get_task_log(node: str, upid: str, limit: int = 100) -> dict:
             "log": data,
         }
     except Exception as e:
-        logger.error(f"Failed to get task log for '{upid}': {e}")
+        logger.error("Failed to get task log for '%s': %s", upid, e)
         return format_error_response(e)
 
 
@@ -159,8 +160,8 @@ async def wait_for_task(node: str, upid: str, timeout: int = 300, poll_interval:
         client = get_client()
         client.validate_node(node)
         logger.info(
-            f"Waiting for task '{upid}' on node '{node}' "
-            f"(timeout={timeout}s, poll_interval={poll_interval}s)"
+            "Waiting for task '%s' on node '%s' (timeout=%ds, poll_interval=%ds)",
+            upid, node, timeout, poll_interval,
         )
 
         elapsed = 0
@@ -169,7 +170,7 @@ async def wait_for_task(node: str, upid: str, timeout: int = 300, poll_interval:
             task_status = data.get("status", "")
 
             if task_status != "running":
-                logger.info(f"Task '{upid}' completed with status: {task_status}")
+                logger.info("Task '%s' completed with status: %s", upid, task_status)
                 return {
                     "status": "success",
                     "node": node,
@@ -183,11 +184,14 @@ async def wait_for_task(node: str, upid: str, timeout: int = 300, poll_interval:
 
         raise TaskTimeoutError(f"Task '{upid}' did not complete within {timeout} seconds.")
     except TaskTimeoutError:
-        logger.warning(f"Task '{upid}' timed out after {timeout}s")
+        logger.warning("Task '%s' timed out after %ds", upid, timeout)
         return format_error_response(
             TaskTimeoutError(f"Task '{upid}' did not complete within {timeout} seconds."),
-            suggestion="Increase the timeout or check the task status manually with get_task_status.",
+            suggestion=(
+                "Increase the timeout or check the task status manually "
+                "with get_task_status."
+            ),
         )
     except Exception as e:
-        logger.error(f"Failed while waiting for task '{upid}': {e}")
+        logger.error("Failed while waiting for task '%s': %s", upid, e)
         return format_error_response(e)

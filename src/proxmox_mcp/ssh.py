@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -37,7 +38,18 @@ class SSHExecutor:
     def _create_client(self, host: str) -> paramiko.SSHClient:
         """Create and configure a paramiko SSH client."""
         client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+        if self.config.PROXMOX_SSH_HOST_KEY_CHECKING:
+            known_hosts = (
+                self.config.PROXMOX_SSH_KNOWN_HOSTS
+                or os.path.expanduser("~/.ssh/known_hosts")
+            )
+            if os.path.exists(known_hosts):
+                client.load_host_keys(known_hosts)
+            client.set_missing_host_key_policy(paramiko.RejectPolicy())
+        else:
+            logger.warning("SSH host key checking disabled — vulnerable to MITM attacks")
+            client.set_missing_host_key_policy(paramiko.WarningPolicy())
 
         connect_kwargs: dict = {
             "hostname": host,

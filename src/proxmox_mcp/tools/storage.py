@@ -1,7 +1,9 @@
 """Storage management tools for Proxmox VE."""
 
 import logging
+
 from proxmox_mcp.utils.errors import format_error_response
+from proxmox_mcp.utils.formatters import format_task_result
 from proxmox_mcp.utils.sanitizers import validate_storage_id
 from proxmox_mcp.utils.validators import validate_node_name
 
@@ -40,7 +42,7 @@ async def list_storage() -> dict:
             "storage": data,
         }
     except Exception as e:
-        logger.error(f"Failed to list storage: {e}")
+        logger.error("Failed to list storage: %s", e)
         return format_error_response(e)
 
 
@@ -56,7 +58,7 @@ async def get_storage_status(node: str, storage: str) -> dict:
         validate_node_name(node)
         client = get_client()
         client.validate_node(node)
-        logger.info(f"Fetching storage status for '{storage}' on node '{node}'")
+        logger.info("Fetching storage status for '%s' on node '%s'", storage, node)
         data = await client.api_call(client.api.nodes(node).storage(storage).status.get)
 
         return {
@@ -66,7 +68,7 @@ async def get_storage_status(node: str, storage: str) -> dict:
             "data": data,
         }
     except Exception as e:
-        logger.error(f"Failed to get storage status for '{storage}' on '{node}': {e}")
+        logger.error("Failed to get storage status for '%s' on '%s': %s", storage, node, e)
         return format_error_response(e)
 
 
@@ -85,8 +87,8 @@ async def list_storage_content(node: str, storage: str, content_type: str | None
         client = get_client()
         client.validate_node(node)
         logger.info(
-            f"Listing content for storage '{storage}' on node '{node}' "
-            f"(content_type={content_type})"
+            "Listing content for storage '%s' on node '%s' (content_type=%s)",
+            storage, node, content_type,
         )
 
         kwargs = {}
@@ -104,7 +106,7 @@ async def list_storage_content(node: str, storage: str, content_type: str | None
             "content": data,
         }
     except Exception as e:
-        logger.error(f"Failed to list content for storage '{storage}' on '{node}': {e}")
+        logger.error("Failed to list content for storage '%s' on '%s': %s", storage, node, e)
         return format_error_response(e)
 
 
@@ -120,7 +122,7 @@ async def get_available_isos(node: str, storage: str = "local") -> dict:
         validate_node_name(node)
         client = get_client()
         client.validate_node(node)
-        logger.info(f"Fetching available ISOs from '{storage}' on node '{node}'")
+        logger.info("Fetching available ISOs from '%s' on node '%s'", storage, node)
         data = await client.api_call(
             client.api.nodes(node).storage(storage).content.get, content="iso"
         )
@@ -133,7 +135,7 @@ async def get_available_isos(node: str, storage: str = "local") -> dict:
             "isos": data,
         }
     except Exception as e:
-        logger.error(f"Failed to get ISOs from '{storage}' on '{node}': {e}")
+        logger.error("Failed to get ISOs from '%s' on '%s': %s", storage, node, e)
         return format_error_response(e)
 
 
@@ -149,7 +151,7 @@ async def get_available_templates(node: str, storage: str = "local") -> dict:
         validate_node_name(node)
         client = get_client()
         client.validate_node(node)
-        logger.info(f"Fetching available templates from '{storage}' on node '{node}'")
+        logger.info("Fetching available templates from '%s' on node '%s'", storage, node)
         data = await client.api_call(
             client.api.nodes(node).storage(storage).content.get, content="vztmpl"
         )
@@ -162,7 +164,7 @@ async def get_available_templates(node: str, storage: str = "local") -> dict:
             "templates": data,
         }
     except Exception as e:
-        logger.error(f"Failed to get templates from '{storage}' on '{node}': {e}")
+        logger.error("Failed to get templates from '%s' on '%s': %s", storage, node, e)
         return format_error_response(e)
 
 
@@ -411,4 +413,63 @@ async def remove_storage(
         }
     except Exception as e:
         logger.error("Failed to remove storage '%s': %s", storage_id, e)
+        return format_error_response(e)
+
+
+VALID_DOWNLOAD_CONTENT = frozenset({"iso", "vztmpl"})
+
+
+@mcp.tool()
+async def download_to_storage(
+    node: str,
+    storage: str,
+    url: str,
+    content: str,
+    filename: str,
+    verify_certificates: bool = True,
+) -> dict:
+    """Download an ISO or container template from a URL to storage.
+
+    Args:
+        node: The node to download on.
+        storage: Target storage (e.g. 'local').
+        url: URL to download from.
+        content: Content type - 'iso' or 'vztmpl'.
+        filename: Filename to save as (e.g. 'ubuntu-24.04.iso').
+        verify_certificates: Verify SSL certificates (default True).
+    """
+    try:
+        validate_node_name(node)
+        client = get_client()
+        client.validate_node(node)
+        if content not in VALID_DOWNLOAD_CONTENT:
+            return format_error_response(
+                Exception(
+                    f"Invalid content type '{content}'. "
+                    f"Must be 'iso' or 'vztmpl'."
+                )
+            )
+        if client.is_dry_run:
+            return client.dry_run_response(
+                "download_to_storage",
+                node=node, storage=storage, url=url, filename=filename,
+            )
+        kwargs = {
+            "url": url,
+            "content": content,
+            "filename": filename,
+        }
+        if not verify_certificates:
+            kwargs["verify-certificates"] = 0
+        logger.info(
+            "Downloading %s to '%s' on node '%s' from %s",
+            content, storage, node, url,
+        )
+        upid = await client.api_call(
+            client.api.nodes(node).storage(storage)("download-url").post,
+            **kwargs,
+        )
+        return format_task_result({"data": upid})
+    except Exception as e:
+        logger.error("Failed to download to storage '%s': %s", storage, e)
         return format_error_response(e)

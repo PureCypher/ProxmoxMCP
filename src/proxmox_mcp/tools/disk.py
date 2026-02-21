@@ -24,6 +24,7 @@ from proxmox_mcp.utils.sanitizers import (
     validate_mount_options,
     validate_mount_path,
     validate_partition_table,
+    validate_uuid,
 )
 from proxmox_mcp.utils.validators import validate_node_name
 
@@ -613,13 +614,17 @@ async def create_mount_point(
         fstab_added = False
         fstab_line = None
         if persist_fstab and device_uuid:
+            # Validate UUID format before shell interpolation
+            validate_uuid(device_uuid)
             fstab_line = f"UUID={device_uuid} {mount_path} {fs_type} {mount_options} 0 2"
 
             # Backup fstab
             await ssh.execute(node, "cp /etc/fstab /etc/fstab.bak.$(date +%s)")
 
-            # Add entry
-            result = await ssh.execute(node, f"echo '{fstab_line}' >> /etc/fstab")
+            # Add entry using printf for safety
+            result = await ssh.execute(
+                node, f"printf '%s\\n' '{fstab_line}' >> /etc/fstab"
+            )
             if result.success:
                 # Validate fstab
                 validate = await ssh.execute(node, "mount -a --fake")

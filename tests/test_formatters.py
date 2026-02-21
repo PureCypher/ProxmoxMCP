@@ -1,9 +1,9 @@
 from proxmox_mcp.utils.formatters import (
-    format_vm_summary,
-    format_container_summary,
     format_bytes,
-    format_uptime,
+    format_container_summary,
     format_task_result,
+    format_uptime,
+    format_vm_summary,
 )
 
 

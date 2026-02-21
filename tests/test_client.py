@@ -1,11 +1,14 @@
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
+
 from proxmox_mcp.client import ProxmoxClient
 from proxmox_mcp.config import ProxmoxConfig
 from proxmox_mcp.utils.errors import (
-    VMNotFoundError,
-    ProtectedResourceError,
+    InvalidParameterError,
     NodeNotAllowedError,
+    ProtectedResourceError,
+    VMNotFoundError,
 )
 
 
@@ -76,6 +79,37 @@ def test_dry_run_response(client):
     assert result["status"] == "dry_run"
     assert result["action"] == "delete_vm"
     assert result["params"]["vmid"] == 100
+
+
+@pytest.mark.asyncio
+async def test_resolve_node_with_explicit_node(client):
+    node = await client.resolve_node(100, "pve1")
+    assert node == "pve1"
+
+
+@pytest.mark.asyncio
+async def test_resolve_node_auto_detect(client):
+    client._api.cluster.resources.get.return_value = [
+        {"vmid": 100, "node": "pve2", "type": "qemu"},
+    ]
+    node = await client.resolve_node(100, None)
+    assert node == "pve2"
+
+
+@pytest.mark.asyncio
+async def test_resolve_node_invalid_name(client):
+    with pytest.raises(InvalidParameterError):
+        await client.resolve_node(100, "bad node!")
+
+
+@pytest.mark.asyncio
+async def test_resolve_node_disallowed_node(mock_config, monkeypatch):
+    monkeypatch.setenv("PROXMOX_ALLOWED_NODES", "pve1,pve2")
+    config = ProxmoxConfig()
+    with patch("proxmox_mcp.client.ProxmoxAPI"):
+        c = ProxmoxClient(config)
+        with pytest.raises(NodeNotAllowedError):
+            await c.resolve_node(100, "pve3")
 
 
 @pytest.mark.asyncio

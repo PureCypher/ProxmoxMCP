@@ -1,7 +1,8 @@
 """Tests for backup and snapshot tools."""
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
 
 
 @pytest.fixture
@@ -12,6 +13,7 @@ def mock_client():
         client.config.PROXMOX_PROTECTED_VMIDS = []
         client.is_dry_run = False
         client.resolve_node_for_vmid = AsyncMock(return_value="pve1")
+        client.resolve_node = AsyncMock(return_value="pve1")
         mock_get.return_value = client
         yield client
 
@@ -66,3 +68,66 @@ async def test_list_backups(mock_client):
     )
     result = await list_backups(node="pve1")
     assert result["status"] == "success"
+
+
+# --- list_backup_jobs ---
+
+
+@pytest.mark.asyncio
+async def test_list_backup_jobs(mock_client):
+    from proxmox_mcp.tools.backup import list_backup_jobs
+
+    mock_client.api_call = AsyncMock(
+        return_value=[
+            {"id": "backup-001", "schedule": "0 2 * * *", "storage": "local"},
+        ]
+    )
+    result = await list_backup_jobs()
+    assert result["status"] == "success"
+    assert result["count"] == 1
+
+
+# --- create_backup_job ---
+
+
+@pytest.mark.asyncio
+async def test_create_backup_job(mock_client):
+    from proxmox_mcp.tools.backup import create_backup_job
+
+    mock_client.api_call = AsyncMock(return_value=None)
+    result = await create_backup_job(
+        storage="local", schedule="0 2 * * *", vmid="100,101"
+    )
+    assert result["status"] == "success"
+    assert result["schedule"] == "0 2 * * *"
+
+
+@pytest.mark.asyncio
+async def test_create_backup_job_dry_run(mock_client):
+    from proxmox_mcp.tools.backup import create_backup_job
+
+    mock_client.is_dry_run = True
+    mock_client.dry_run_response.return_value = {"status": "dry_run"}
+    result = await create_backup_job(storage="local", schedule="0 3 * * *")
+    assert result["status"] == "dry_run"
+
+
+# --- delete_backup_job ---
+
+
+@pytest.mark.asyncio
+async def test_delete_backup_job_requires_confirm(mock_client):
+    from proxmox_mcp.tools.backup import delete_backup_job
+
+    result = await delete_backup_job(job_id="backup-001")
+    assert result["status"] == "confirmation_required"
+
+
+@pytest.mark.asyncio
+async def test_delete_backup_job_confirmed(mock_client):
+    from proxmox_mcp.tools.backup import delete_backup_job
+
+    mock_client.api_call = AsyncMock(return_value=None)
+    result = await delete_backup_job(job_id="backup-001", confirm=True)
+    assert result["status"] == "success"
+    assert result["job_id"] == "backup-001"

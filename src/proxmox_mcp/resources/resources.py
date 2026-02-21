@@ -3,7 +3,8 @@
 
 import json
 import logging
-from proxmox_mcp.utils.formatters import format_vm_summary, format_container_summary
+
+from proxmox_mcp.utils.formatters import format_container_summary, format_vm_summary
 
 logger = logging.getLogger("proxmox-mcp")
 

@@ -82,6 +82,12 @@ CRITICAL_PATHS = frozenset(
     }
 )
 
+UUID_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+
+SNAPNAME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_\-\.]{0,39}$")
+
 VALID_FILESYSTEMS = frozenset({"ext4", "xfs", "vfat"})
 VALID_PARTITION_TABLES = frozenset({"gpt", "msdos"})
 
@@ -210,3 +216,22 @@ def validate_partition_table(table_type: str) -> None:
             f"Partition table type '{table_type}' is not supported. "
             f"Supported: {', '.join(sorted(VALID_PARTITION_TABLES))}"
         )
+
+
+def validate_snapname(name: str) -> None:
+    """Validate snapshot name matches Proxmox requirements."""
+    if not SNAPNAME_RE.match(name):
+        raise InvalidParameterError(
+            f"Invalid snapshot name '{name}'. Must start with a letter, "
+            "contain only [a-zA-Z0-9_-.], and be 1-40 characters."
+        )
+
+
+def validate_uuid(uuid_str: str) -> str:
+    """Validate a UUID string format. Returns the validated UUID."""
+    if not UUID_RE.match(uuid_str):
+        raise InvalidParameterError(
+            f"Invalid UUID format: {uuid_str!r}. "
+            f"Expected format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+        )
+    return uuid_str

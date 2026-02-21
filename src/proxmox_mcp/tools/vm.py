@@ -2,11 +2,45 @@
 
 import json
 import logging
+
 from proxmox_mcp.utils.errors import format_error_response
-from proxmox_mcp.utils.validators import validate_vmid, validate_node_name
-from proxmox_mcp.utils.formatters import format_vm_summary, format_task_result
+from proxmox_mcp.utils.formatters import format_task_result, format_vm_summary
+from proxmox_mcp.utils.validators import validate_node_name, validate_vmid
 
 logger = logging.getLogger("proxmox-mcp")
+
+# Allowlist of VM config keys safe to modify via extra_config.
+# Keys NOT in this set are rejected to prevent dangerous operations
+# (e.g., hookscript for arbitrary code execution, hostpci for PCI passthrough).
+VM_SAFE_CONFIG_KEYS = frozenset({
+    # CPU & Memory
+    "cores", "sockets", "vcpus", "cpu", "cpulimit", "cpuunits",
+    "memory", "balloon", "shares", "numa",
+    # Boot & BIOS
+    "boot", "bootdisk", "bios", "machine", "ostype",
+    # Display
+    "vga", "tablet",
+    # Cloud-init
+    "ciuser", "cipassword", "citype", "cicustom",
+    "ipconfig0", "ipconfig1", "ipconfig2", "ipconfig3",
+    "nameserver", "searchdomain", "sshkeys",
+    # Description & Tags
+    "description", "tags", "name", "onboot", "startup", "protection",
+    # Agent
+    "agent",
+    # Hotplug
+    "hotplug",
+    # Disk
+    "ide0", "ide1", "ide2", "ide3",
+    "scsi0", "scsi1", "scsi2", "scsi3",
+    "virtio0", "virtio1", "virtio2", "virtio3",
+    "sata0", "sata1", "sata2", "sata3", "sata4", "sata5",
+    "efidisk0", "tpmstate0",
+    # Network
+    "net0", "net1", "net2", "net3",
+    # Misc safe
+    "kvm", "localtime", "freeze", "template",
+})
 
 
 def get_client():
@@ -22,15 +56,6 @@ def get_mcp():
 
 
 mcp = get_mcp()
-
-
-async def _resolve_node(client, vmid: int, node: str | None) -> str:
-    """Resolve node for a VMID, auto-detecting if not provided."""
-    if node:
-        validate_node_name(node)
-        client.validate_node(node)
-        return node
-    return await client.resolve_node_for_vmid(vmid)
 
 
 @mcp.tool()
@@ -69,7 +94,7 @@ async def get_vm_status(vmid: int, node: str | None = None) -> dict:
     try:
         client = get_client()
         validate_vmid(vmid)
-        node = await _resolve_node(client, vmid, node)
+        node = await client.resolve_node(vmid, node)
         data = await client.api_call(client.api.nodes(node).qemu(vmid).status.current.get)
         return {"status": "success", "vmid": vmid, "node": node, "data": data}
     except Exception as e:
@@ -87,7 +112,7 @@ async def get_vm_config(vmid: int, node: str | None = None) -> dict:
     try:
         client = get_client()
         validate_vmid(vmid)
-        node = await _resolve_node(client, vmid, node)
+        node = await client.resolve_node(vmid, node)
         data = await client.api_call(client.api.nodes(node).qemu(vmid).config.get)
         return {"status": "success", "vmid": vmid, "node": node, "config": data}
     except Exception as e:
@@ -106,7 +131,7 @@ async def get_vm_rrd_data(vmid: int, node: str | None = None, timeframe: str = "
     try:
         client = get_client()
         validate_vmid(vmid)
-        node = await _resolve_node(client, vmid, node)
+        node = await client.resolve_node(vmid, node)
         data = await client.api_call(
             client.api.nodes(node).qemu(vmid).rrddata.get, timeframe=timeframe
         )
@@ -133,7 +158,8 @@ async def start_vm(vmid: int, node: str | None = None, timeout: int = 60) -> dic
     try:
         client = get_client()
         validate_vmid(vmid)
-        node = await _resolve_node(client, vmid, node)
+        client.check_protected(vmid)
+        node = await client.resolve_node(vmid, node)
         if client.is_dry_run:
             return client.dry_run_response("start_vm", vmid=vmid, node=node)
         logger.info("Starting VM %d on %s", vmid, node)
@@ -155,7 +181,7 @@ async def stop_vm(vmid: int, node: str | None = None) -> dict:
         client = get_client()
         validate_vmid(vmid)
         client.check_protected(vmid)
-        node = await _resolve_node(client, vmid, node)
+        node = await client.resolve_node(vmid, node)
         if client.is_dry_run:
             return client.dry_run_response("stop_vm", vmid=vmid, node=node)
         logger.warning("Hard stopping VM %d on %s", vmid, node)
@@ -178,7 +204,7 @@ async def shutdown_vm(vmid: int, node: str | None = None, timeout: int = 120) ->
         client = get_client()
         validate_vmid(vmid)
         client.check_protected(vmid)
-        node = await _resolve_node(client, vmid, node)
+        node = await client.resolve_node(vmid, node)
         if client.is_dry_run:
             return client.dry_run_response("shutdown_vm", vmid=vmid, node=node)
         logger.info("Graceful shutdown of VM %d on %s", vmid, node)
@@ -202,7 +228,7 @@ async def reboot_vm(vmid: int, node: str | None = None) -> dict:
         client = get_client()
         validate_vmid(vmid)
         client.check_protected(vmid)
-        node = await _resolve_node(client, vmid, node)
+        node = await client.resolve_node(vmid, node)
         if client.is_dry_run:
             return client.dry_run_response("reboot_vm", vmid=vmid, node=node)
         logger.info("Rebooting VM %d on %s", vmid, node)
@@ -224,7 +250,7 @@ async def suspend_vm(vmid: int, node: str | None = None) -> dict:
         client = get_client()
         validate_vmid(vmid)
         client.check_protected(vmid)
-        node = await _resolve_node(client, vmid, node)
+        node = await client.resolve_node(vmid, node)
         if client.is_dry_run:
             return client.dry_run_response("suspend_vm", vmid=vmid, node=node)
         logger.info("Suspending VM %d on %s", vmid, node)
@@ -246,7 +272,7 @@ async def resume_vm(vmid: int, node: str | None = None) -> dict:
         client = get_client()
         validate_vmid(vmid)
         client.check_protected(vmid)
-        node = await _resolve_node(client, vmid, node)
+        node = await client.resolve_node(vmid, node)
         if client.is_dry_run:
             return client.dry_run_response("resume_vm", vmid=vmid, node=node)
         logger.info("Resuming VM %d on %s", vmid, node)
@@ -268,7 +294,7 @@ async def reset_vm(vmid: int, node: str | None = None) -> dict:
         client = get_client()
         validate_vmid(vmid)
         client.check_protected(vmid)
-        node = await _resolve_node(client, vmid, node)
+        node = await client.resolve_node(vmid, node)
         if client.is_dry_run:
             return client.dry_run_response("reset_vm", vmid=vmid, node=node)
         logger.warning("Hard resetting VM %d on %s", vmid, node)
@@ -303,7 +329,7 @@ async def clone_vm(
         client = get_client()
         validate_vmid(vmid)
         validate_vmid(newid)
-        node = await _resolve_node(client, vmid, node)
+        node = await client.resolve_node(vmid, node)
         if client.is_dry_run:
             return client.dry_run_response("clone_vm", vmid=vmid, newid=newid, name=name, node=node)
         kwargs = {"newid": newid, "name": name, "full": 1 if full else 0}
@@ -333,7 +359,7 @@ async def migrate_vm(
     try:
         client = get_client()
         validate_vmid(vmid)
-        node = await _resolve_node(client, vmid, node)
+        node = await client.resolve_node(vmid, node)
         if client.is_dry_run:
             return client.dry_run_response("migrate_vm", vmid=vmid, target=target_node, node=node)
         logger.info("Migrating VM %d from %s to %s (online=%s)", vmid, node, target_node, online)
@@ -429,7 +455,7 @@ async def delete_vm(
         client = get_client()
         validate_vmid(vmid)
         client.check_protected(vmid)
-        node = await _resolve_node(client, vmid, node)
+        node = await client.resolve_node(vmid, node)
         if not confirm:
             vm_data = await client.api_call(client.api.nodes(node).qemu(vmid).status.current.get)
             return {
@@ -456,6 +482,90 @@ async def delete_vm(
         logger.warning("DELETING VM %d on %s", vmid, node)
         upid = await client.api_call(client.api.nodes(node).qemu(vmid).delete, **kwargs)
         return format_task_result({"data": upid})
+    except Exception as e:
+        return format_error_response(e)
+
+
+@mcp.tool()
+async def resize_vm_disk(
+    vmid: int,
+    disk: str,
+    size: str,
+    node: str | None = None,
+) -> dict:
+    """Resize a VM disk. Can only grow disks, not shrink.
+
+    Args:
+        vmid: The VM ID.
+        disk: Disk name (e.g. 'scsi0', 'virtio0', 'ide0', 'sata0').
+        size: New absolute size (e.g. '50G') or relative increase (e.g. '+10G').
+        node: The node name. Auto-detected if omitted.
+    """
+    try:
+        client = get_client()
+        validate_vmid(vmid)
+        client.check_protected(vmid)
+        node = await client.resolve_node(vmid, node)
+        if client.is_dry_run:
+            return client.dry_run_response(
+                "resize_vm_disk", vmid=vmid, disk=disk, size=size, node=node
+            )
+        logger.info("Resizing disk '%s' on VM %d to %s", disk, vmid, size)
+        await client.api_call(
+            client.api.nodes(node).qemu(vmid).resize.put, disk=disk, size=size
+        )
+        return {
+            "status": "success",
+            "vmid": vmid,
+            "node": node,
+            "disk": disk,
+            "size": size,
+        }
+    except Exception as e:
+        return format_error_response(e)
+
+
+@mcp.tool()
+async def convert_vm_to_template(
+    vmid: int,
+    node: str | None = None,
+    confirm: bool = False,
+) -> dict:
+    """Convert a VM to a template. This is irreversible. Set confirm=True to execute.
+
+    Args:
+        vmid: The VM ID to convert.
+        node: The node name. Auto-detected if omitted.
+        confirm: Must be True to execute. False returns a confirmation prompt.
+    """
+    try:
+        client = get_client()
+        validate_vmid(vmid)
+        client.check_protected(vmid)
+        node = await client.resolve_node(vmid, node)
+        if not confirm:
+            return {
+                "status": "confirmation_required",
+                "warning": (
+                    f"This will convert VM {vmid} to a template. "
+                    f"This action is IRREVERSIBLE. The VM will no longer be startable."
+                ),
+                "action": "Call convert_vm_to_template again with confirm=True.",
+            }
+        if client.is_dry_run:
+            return client.dry_run_response(
+                "convert_vm_to_template", vmid=vmid, node=node
+            )
+        logger.warning("Converting VM %d to template on %s", vmid, node)
+        await client.api_call(
+            client.api.nodes(node).qemu(vmid).template.post
+        )
+        return {
+            "status": "success",
+            "vmid": vmid,
+            "node": node,
+            "message": f"VM {vmid} has been converted to a template.",
+        }
     except Exception as e:
         return format_error_response(e)
 
@@ -495,7 +605,7 @@ async def modify_vm_config(
         client = get_client()
         validate_vmid(vmid)
         client.check_protected(vmid)
-        node = await _resolve_node(client, vmid, node)
+        node = await client.resolve_node(vmid, node)
         if client.is_dry_run:
             return client.dry_run_response("modify_vm_config", vmid=vmid, node=node)
         kwargs = {}
@@ -519,9 +629,14 @@ async def modify_vm_config(
             kwargs["tags"] = tags
         if extra_config:
             extra = json.loads(extra_config)
-            # Prevent overriding safety-relevant parameters
-            blocked_keys = {"vmid", "node", "digest"}
-            extra = {k: v for k, v in extra.items() if k not in blocked_keys}
+            unsafe_keys = [k for k in extra if k not in VM_SAFE_CONFIG_KEYS]
+            if unsafe_keys:
+                return format_error_response(
+                    Exception(
+                        f"Keys not in allowlist: {unsafe_keys}. "
+                        f"Modifying these keys is restricted for safety."
+                    )
+                )
             kwargs.update(extra)
         if not kwargs:
             return {
@@ -537,5 +652,104 @@ async def modify_vm_config(
             Exception("extra_config must be valid JSON"),
             suggestion='Example: \'{"boot": "order=scsi0;net0"}\'',
         )
+    except Exception as e:
+        return format_error_response(e)
+
+
+@mcp.tool()
+async def set_vm_cloudinit(
+    vmid: int,
+    node: str | None = None,
+    ciuser: str | None = None,
+    cipassword: str | None = None,
+    sshkeys: str | None = None,
+    ipconfig0: str | None = None,
+    ipconfig1: str | None = None,
+    nameserver: str | None = None,
+    searchdomain: str | None = None,
+) -> dict:
+    """Configure cloud-init settings for a VM.
+
+    Args:
+        vmid: The VM ID.
+        node: The node name. Auto-detected if omitted.
+        ciuser: Default user name.
+        cipassword: Password for the default user.
+        sshkeys: URL-encoded SSH public keys (newline-separated).
+        ipconfig0: IP config for first interface (e.g. 'ip=dhcp' or
+            'ip=10.0.0.5/24,gw=10.0.0.1').
+        ipconfig1: IP config for second interface.
+        nameserver: DNS server(s), space-separated.
+        searchdomain: DNS search domain(s), space-separated.
+    """
+    try:
+        client = get_client()
+        validate_vmid(vmid)
+        client.check_protected(vmid)
+        node = await client.resolve_node(vmid, node)
+        if client.is_dry_run:
+            return client.dry_run_response("set_vm_cloudinit", vmid=vmid, node=node)
+        kwargs: dict = {}
+        if ciuser is not None:
+            kwargs["ciuser"] = ciuser
+        if cipassword is not None:
+            kwargs["cipassword"] = cipassword
+        if sshkeys is not None:
+            kwargs["sshkeys"] = sshkeys
+        if ipconfig0 is not None:
+            kwargs["ipconfig0"] = ipconfig0
+        if ipconfig1 is not None:
+            kwargs["ipconfig1"] = ipconfig1
+        if nameserver is not None:
+            kwargs["nameserver"] = nameserver
+        if searchdomain is not None:
+            kwargs["searchdomain"] = searchdomain
+        if not kwargs:
+            return format_error_response(
+                Exception("No cloud-init settings specified.")
+            )
+        logger.info("Setting cloud-init on VM %d: %s", vmid, list(kwargs.keys()))
+        await client.api_call(
+            client.api.nodes(node).qemu(vmid).config.put, **kwargs
+        )
+        return {
+            "status": "success",
+            "vmid": vmid,
+            "node": node,
+            "changes": list(kwargs.keys()),
+        }
+    except Exception as e:
+        return format_error_response(e)
+
+
+@mcp.tool()
+async def regenerate_cloudinit_image(vmid: int, node: str | None = None) -> dict:
+    """Regenerate the cloud-init image for a VM.
+
+    Call this after changing cloud-init settings to apply them.
+
+    Args:
+        vmid: The VM ID.
+        node: The node name. Auto-detected if omitted.
+    """
+    try:
+        client = get_client()
+        validate_vmid(vmid)
+        client.check_protected(vmid)
+        node = await client.resolve_node(vmid, node)
+        if client.is_dry_run:
+            return client.dry_run_response(
+                "regenerate_cloudinit_image", vmid=vmid, node=node
+            )
+        logger.info("Regenerating cloud-init image for VM %d on %s", vmid, node)
+        await client.api_call(
+            client.api.nodes(node).qemu(vmid).cloudinit.post
+        )
+        return {
+            "status": "success",
+            "vmid": vmid,
+            "node": node,
+            "message": "Cloud-init image regenerated.",
+        }
     except Exception as e:
         return format_error_response(e)
