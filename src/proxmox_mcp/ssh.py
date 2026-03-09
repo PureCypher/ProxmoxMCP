@@ -1,4 +1,4 @@
-"""SSH execution layer for running commands on Proxmox nodes."""
+"""SSH execution layer for running commands on Proxmox nodes and VMs."""
 
 import asyncio
 import logging
@@ -30,13 +30,29 @@ class SSHResult:
 
 
 class SSHExecutor:
-    """Execute commands on Proxmox nodes over SSH."""
+    """Execute commands on Proxmox nodes and VMs over SSH."""
 
     def __init__(self, config: ProxmoxConfig) -> None:
         self.config = config
 
-    def _create_client(self, host: str) -> paramiko.SSHClient:
-        """Create and configure a paramiko SSH client."""
+    def _create_client(
+        self,
+        host: str,
+        *,
+        port: int | None = None,
+        username: str | None = None,
+        password: str | None = None,
+        key_path: str | None = None,
+    ) -> paramiko.SSHClient:
+        """Create and configure a paramiko SSH client.
+
+        Args:
+            host: Target hostname or IP.
+            port: SSH port override (defaults to config).
+            username: SSH username override (defaults to config).
+            password: SSH password override (defaults to config).
+            key_path: SSH private key path override (defaults to config).
+        """
         client = paramiko.SSHClient()
 
         if self.config.PROXMOX_SSH_HOST_KEY_CHECKING:
@@ -51,23 +67,25 @@ class SSHExecutor:
             logger.warning("SSH host key checking disabled — vulnerable to MITM attacks")
             client.set_missing_host_key_policy(paramiko.WarningPolicy())
 
+        effective_port = port or self.config.PROXMOX_SSH_PORT
+        effective_user = username or self.config.PROXMOX_SSH_USER
+        effective_key = key_path or self.config.PROXMOX_SSH_KEY_PATH
+        effective_password = password or self.config.PROXMOX_SSH_PASSWORD or self.config.PROXMOX_PASSWORD
+
         connect_kwargs: dict = {
             "hostname": host,
-            "port": self.config.PROXMOX_SSH_PORT,
-            "username": self.config.PROXMOX_SSH_USER,
+            "port": effective_port,
+            "username": effective_user,
             "timeout": 10,
         }
 
-        # Resolve SSH password: dedicated SSH password, or fall back to Proxmox API password
-        ssh_password = self.config.PROXMOX_SSH_PASSWORD or self.config.PROXMOX_PASSWORD
-
-        if self.config.PROXMOX_SSH_KEY_PATH:
-            key_path = Path(self.config.PROXMOX_SSH_KEY_PATH).expanduser()
-            if not key_path.exists():
-                raise SSHExecutionError(f"SSH key not found: {key_path}")
-            connect_kwargs["key_filename"] = str(key_path)
-        elif ssh_password:
-            connect_kwargs["password"] = ssh_password
+        if effective_key:
+            resolved_key = Path(effective_key).expanduser()
+            if not resolved_key.exists():
+                raise SSHExecutionError(f"SSH key not found: {resolved_key}")
+            connect_kwargs["key_filename"] = str(resolved_key)
+        elif effective_password:
+            connect_kwargs["password"] = effective_password
             # Skip default key discovery when password is explicitly provided
             connect_kwargs["look_for_keys"] = False
             connect_kwargs["allow_agent"] = False
@@ -81,10 +99,22 @@ class SSHExecutor:
 
         return client
 
-    def _execute_sync(self, host: str, command: str, timeout: int = 30) -> SSHResult:
+    def _execute_sync(
+        self,
+        host: str,
+        command: str,
+        timeout: int = 30,
+        *,
+        port: int | None = None,
+        username: str | None = None,
+        password: str | None = None,
+        key_path: str | None = None,
+    ) -> SSHResult:
         """Execute a command over SSH synchronously."""
         timeout = min(timeout, MAX_SSH_TIMEOUT)
-        client = self._create_client(host)
+        client = self._create_client(
+            host, port=port, username=username, password=password, key_path=key_path
+        )
         try:
             logger.debug("SSH %s: %s", host, command)
             _, stdout, stderr = client.exec_command(command, timeout=timeout)
@@ -131,6 +161,57 @@ class SSHExecutor:
                 "SSH command exited %d on %s: stderr=%s",
                 result.exit_code,
                 node,
+                result.stderr[:200],
+            )
+        return result
+
+    async def execute_on_host(
+        self,
+        host: str,
+        command: str,
+        timeout: int = 30,
+        *,
+        port: int | None = None,
+        username: str | None = None,
+        password: str | None = None,
+        key_path: str | None = None,
+    ) -> SSHResult:
+        """Execute a command on an arbitrary host (VM, container, or node) asynchronously.
+
+        Unlike execute(), this connects directly to the given host/IP without
+        resolving through Proxmox node configuration.
+
+        Args:
+            host: Target hostname or IP address.
+            command: Shell command to execute.
+            timeout: Command timeout in seconds (max 120).
+            port: SSH port override.
+            username: SSH username override.
+            password: SSH password override.
+            key_path: SSH private key path override.
+        """
+        full_command = (
+            "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH; "
+            + command
+        )
+
+        logger.info("SSH executing on %s: %s", host, command)
+        result = await asyncio.to_thread(
+            self._execute_sync,
+            host,
+            full_command,
+            timeout,
+            port=port,
+            username=username,
+            password=password,
+            key_path=key_path,
+        )
+
+        if result.exit_code != 0:
+            logger.warning(
+                "SSH command exited %d on %s: stderr=%s",
+                result.exit_code,
+                host,
                 result.stderr[:200],
             )
         return result

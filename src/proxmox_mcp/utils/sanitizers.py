@@ -91,6 +91,14 @@ SNAPNAME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_\-\.]{0,39}$")
 VALID_FILESYSTEMS = frozenset({"ext4", "xfs", "vfat"})
 VALID_PARTITION_TABLES = frozenset({"gpt", "msdos"})
 
+# SSH tool validation patterns
+PACKAGE_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.+\-]{0,127}$")
+SERVICE_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.\-@]{0,127}$")
+REMOTE_FILE_PATH_RE = re.compile(r"^/[a-zA-Z0-9_./\-]+$")
+
+VALID_SERVICE_ACTIONS = frozenset({"start", "stop", "restart", "reload", "enable", "disable", "status"})
+VALID_SCRIPT_INTERPRETERS = frozenset({"bash", "sh", "python3", "python", "perl"})
+
 
 def check_shell_injection(value: str, param_name: str) -> None:
     """Reject any value containing shell metacharacters."""
@@ -235,3 +243,54 @@ def validate_uuid(uuid_str: str) -> str:
             f"Expected format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
         )
     return uuid_str
+
+
+def validate_package_name(name: str) -> None:
+    """Validate a system package name."""
+    check_shell_injection(name, "package")
+    if not PACKAGE_NAME_RE.match(name):
+        raise InvalidParameterError(
+            f"Package name '{name}' is invalid. "
+            f"Must start with alphanumeric and contain only [a-zA-Z0-9_.+-]."
+        )
+
+
+def validate_service_name(name: str) -> None:
+    """Validate a systemd service name."""
+    check_shell_injection(name, "service")
+    if not SERVICE_NAME_RE.match(name):
+        raise InvalidParameterError(
+            f"Service name '{name}' is invalid. "
+            f"Must start with alphanumeric and contain only [a-zA-Z0-9_.\\-@]."
+        )
+
+
+def validate_service_action(action: str) -> None:
+    """Validate a systemd service action."""
+    if action not in VALID_SERVICE_ACTIONS:
+        raise InvalidParameterError(
+            f"Service action '{action}' is invalid. "
+            f"Allowed: {', '.join(sorted(VALID_SERVICE_ACTIONS))}"
+        )
+
+
+def validate_remote_file_path(path: str) -> None:
+    """Validate a remote file path for file transfer."""
+    check_shell_injection(path, "file_path")
+    if ".." in path:
+        raise InvalidParameterError(
+            f"File path '{path}' contains path traversal (..) which is not allowed."
+        )
+    if not REMOTE_FILE_PATH_RE.match(path):
+        raise InvalidParameterError(
+            f"File path '{path}' is invalid. Must be an absolute path with safe characters."
+        )
+
+
+def validate_script_interpreter(interpreter: str) -> None:
+    """Validate a script interpreter name."""
+    if interpreter not in VALID_SCRIPT_INTERPRETERS:
+        raise InvalidParameterError(
+            f"Interpreter '{interpreter}' is not allowed. "
+            f"Allowed: {', '.join(sorted(VALID_SCRIPT_INTERPRETERS))}"
+        )

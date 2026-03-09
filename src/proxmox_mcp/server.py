@@ -36,13 +36,14 @@ ssh_executor = SSHExecutor(config)
 # Import tool modules to register them with mcp
 from proxmox_mcp.prompts import prompts  # noqa: E402, F401
 from proxmox_mcp.resources import resources  # noqa: E402, F401
-from proxmox_mcp.tools import (  # noqa: E402, F401  # noqa: E402, F401  # noqa: E402, F401
+from proxmox_mcp.tools import (  # noqa: E402, F401
     backup,
     cluster,
     container,
     disk,
     network,
     node,
+    ssh_tools,
     storage,
     task,
     vm,
