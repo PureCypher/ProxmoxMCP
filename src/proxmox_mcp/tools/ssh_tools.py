@@ -91,7 +91,8 @@ async def _resolve_vm_ip(client, vmid: int, node: str) -> str:
     if not interfaces:
         raise SSHExecutionError(
             f"Cannot discover IP for VMID {vmid}. "
-            f"Ensure the VM/CT is running and has QEMU guest agent (VMs) or network configured (CTs)."
+            "Ensure the VM/CT is running and has QEMU guest agent (VMs) "
+            "or network configured (CTs)."
         )
 
     # Extract usable IPs: prefer IPv4, skip loopback and link-local
@@ -222,7 +223,10 @@ def _build_install_command(manager: str, packages: list[str]) -> str:
     """Build the install command for a given package manager."""
     pkg_str = " ".join(packages)
     commands = {
-        "apt": f"DEBIAN_FRONTEND=noninteractive apt-get update -qq && apt-get install -y -qq {pkg_str}",
+        "apt": (
+            f"DEBIAN_FRONTEND=noninteractive apt-get update -qq && "
+            f"apt-get install -y -qq {pkg_str}"
+        ),
         "dnf": f"dnf install -y {pkg_str}",
         "yum": f"yum install -y {pkg_str}",
         "apk": f"apk add --no-cache {pkg_str}",

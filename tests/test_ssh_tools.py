@@ -1,4 +1,5 @@
-"""Tests for SSH tools (install_package, manage_service, transfer_file, execute_script, get_system_info)."""
+"""Tests for SSH tools: install_package, manage_service, transfer_file, execute_script,
+get_system_info."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -361,7 +362,7 @@ class TestTransferFile:
         assert result["status"] == "success"
         assert result["destination"] == "/etc/nginx/sites-available/default"
         assert result["permissions"] == "0644"
-        assert result["size_bytes"] == len("server { listen 80; }".encode())
+        assert result["size_bytes"] == len(b"server { listen 80; }")
 
     async def test_transfer_with_owner(self, mock_client, mock_ssh):
         from proxmox_mcp.tools.ssh_tools import transfer_file
@@ -515,7 +516,8 @@ class TestExecuteScript:
         assert result["status"] == "success"
         # Verify timeout was clamped to 120
         call_kwargs = mock_ssh.execute_on_host.call_args
-        assert call_kwargs.kwargs.get("timeout", call_kwargs[0][2] if len(call_kwargs[0]) > 2 else None) == 120
+        positional_timeout = call_kwargs[0][2] if len(call_kwargs[0]) > 2 else None
+        assert call_kwargs.kwargs.get("timeout", positional_timeout) == 120
 
 
 # ---------------------------------------------------------------------------

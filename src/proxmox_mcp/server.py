@@ -20,6 +20,7 @@ logger = logging.getLogger("proxmox-mcp")
 mcp = FastMCP(
     "Proxmox VE Manager",
     json_response=True,
+    port=config.MCP_HTTP_PORT,
     instructions=(
         "You are connected to a Proxmox Virtual Environment cluster. "
         "Use the available tools to manage VMs, containers, nodes, storage, and backups. "
@@ -54,7 +55,7 @@ def main():
     """Entry point for the MCP server."""
     logger.info("Starting Proxmox VE MCP Server")
     if config.MCP_TRANSPORT == "streamable-http":
-        mcp.run(transport="streamable-http", port=config.MCP_HTTP_PORT)
+        mcp.run(transport="streamable-http")
     else:
         mcp.run(transport="stdio")
 

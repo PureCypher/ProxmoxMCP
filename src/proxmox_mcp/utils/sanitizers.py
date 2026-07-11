@@ -96,7 +96,9 @@ PACKAGE_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.+\-]{0,127}$")
 SERVICE_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.\-@]{0,127}$")
 REMOTE_FILE_PATH_RE = re.compile(r"^/[a-zA-Z0-9_./\-]+$")
 
-VALID_SERVICE_ACTIONS = frozenset({"start", "stop", "restart", "reload", "enable", "disable", "status"})
+VALID_SERVICE_ACTIONS = frozenset(
+    {"start", "stop", "restart", "reload", "enable", "disable", "status"}
+)
 VALID_SCRIPT_INTERPRETERS = frozenset({"bash", "sh", "python3", "python", "perl"})
 
 

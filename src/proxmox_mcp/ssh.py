@@ -70,7 +70,9 @@ class SSHExecutor:
         effective_port = port or self.config.PROXMOX_SSH_PORT
         effective_user = username or self.config.PROXMOX_SSH_USER
         effective_key = key_path or self.config.PROXMOX_SSH_KEY_PATH
-        effective_password = password or self.config.PROXMOX_SSH_PASSWORD or self.config.PROXMOX_PASSWORD
+        effective_password = (
+            password or self.config.PROXMOX_SSH_PASSWORD or self.config.PROXMOX_PASSWORD
+        )
 
         connect_kwargs: dict = {
             "hostname": host,

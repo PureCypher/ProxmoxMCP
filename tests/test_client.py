@@ -118,5 +118,6 @@ async def test_client_init_token_auth(mock_config):
         ProxmoxClient(mock_config)
         mock_cls.assert_called_once()
         call_kwargs = mock_cls.call_args[1]
-        assert call_kwargs["token_name"] == "root@pam!tok"
+        assert call_kwargs["user"] == "root@pam"
+        assert call_kwargs["token_name"] == "tok"
         assert call_kwargs["token_value"] == "fake-token"
