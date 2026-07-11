@@ -1,21 +1,27 @@
 """Node-level tools for Proxmox VE."""
 
 import logging
+from typing import TYPE_CHECKING
 
 from proxmox_mcp.utils.errors import format_error_response
 from proxmox_mcp.utils.formatters import format_bytes, format_task_result, format_uptime
 from proxmox_mcp.utils.validators import validate_node_name
 
+if TYPE_CHECKING:
+    from mcp.server.fastmcp import FastMCP
+
+    from proxmox_mcp.client import ProxmoxClient
+
 logger = logging.getLogger("proxmox-mcp")
 
 
-def get_client():
+def get_client() -> "ProxmoxClient":
     from proxmox_mcp.server import proxmox_client
 
     return proxmox_client
 
 
-def get_mcp():
+def get_mcp() -> "FastMCP":
     from proxmox_mcp.server import mcp
 
     return mcp

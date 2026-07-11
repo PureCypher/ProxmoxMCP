@@ -7,6 +7,7 @@ auto-discovery of VM/CT IP addresses via QEMU guest agent or LXC interfaces.
 
 import base64
 import logging
+from typing import TYPE_CHECKING
 
 from proxmox_mcp.utils.errors import (
     InvalidParameterError,
@@ -23,22 +24,28 @@ from proxmox_mcp.utils.sanitizers import (
 )
 from proxmox_mcp.utils.validators import validate_vmid
 
+if TYPE_CHECKING:
+    from mcp.server.fastmcp import FastMCP
+
+    from proxmox_mcp.client import ProxmoxClient
+    from proxmox_mcp.ssh import SSHExecutor
+
 logger = logging.getLogger("proxmox-mcp")
 
 
-def get_client():
+def get_client() -> "ProxmoxClient":
     from proxmox_mcp.server import proxmox_client
 
     return proxmox_client
 
 
-def get_mcp():
+def get_mcp() -> "FastMCP":
     from proxmox_mcp.server import mcp
 
     return mcp
 
 
-def get_ssh():
+def get_ssh() -> "SSHExecutor":
     from proxmox_mcp.server import ssh_executor
 
     return ssh_executor
@@ -96,8 +103,8 @@ async def _resolve_vm_ip(client, vmid: int, node: str) -> str:
         )
 
     # Extract usable IPs: prefer IPv4, skip loopback and link-local
-    ipv4_candidates = []
-    ipv6_candidates = []
+    ipv4_candidates: list[str] = []
+    ipv6_candidates: list[str] = []
 
     for iface in interfaces:
         iface_name = iface.get("name", "")

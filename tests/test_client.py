@@ -81,6 +81,15 @@ def test_dry_run_response(client):
     assert result["params"]["vmid"] == 100
 
 
+def test_dry_run_response_with_action_param(client):
+    """Regression: params containing a key literally named 'action' (e.g. firewall
+    rule action ACCEPT/DROP/REJECT) must not collide with the tool_name argument."""
+    result = client.dry_run_response("create_vm_firewall_rule", vmid=100, action="ACCEPT")
+    assert result["status"] == "dry_run"
+    assert result["action"] == "create_vm_firewall_rule"
+    assert result["params"]["action"] == "ACCEPT"
+
+
 @pytest.mark.asyncio
 async def test_resolve_node_with_explicit_node(client):
     node = await client.resolve_node(100, "pve1")

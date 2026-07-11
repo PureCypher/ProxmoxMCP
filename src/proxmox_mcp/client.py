@@ -2,6 +2,8 @@
 
 import asyncio
 import logging
+from collections.abc import Callable
+from typing import TypeVar
 
 from proxmoxer import ProxmoxAPI
 
@@ -16,6 +18,8 @@ from proxmox_mcp.utils.errors import (
 from proxmox_mcp.utils.validators import validate_node_name
 
 logger = logging.getLogger("proxmox-mcp")
+
+T = TypeVar("T")
 
 
 class ProxmoxClient:
@@ -64,7 +68,7 @@ class ProxmoxClient:
     def api(self) -> ProxmoxAPI:
         return self._api
 
-    async def api_call(self, func, *args, **kwargs):
+    async def api_call(self, func: Callable[..., T], *args, **kwargs) -> T:
         """Run a synchronous proxmoxer API call in a thread."""
         try:
             return await asyncio.to_thread(func, *args, **kwargs)
@@ -81,7 +85,7 @@ class ProxmoxClient:
         resources = await self.api_call(self._api.cluster.resources.get, type="vm")
         for r in resources:
             if r.get("vmid") == vmid:
-                return r["node"]
+                return str(r["node"])
         raise VMNotFoundError(f"VMID {vmid} not found in cluster.")
 
     async def test_connection(self) -> dict:
@@ -107,11 +111,11 @@ class ProxmoxClient:
                 f"Node '{node}' is not in the allowed nodes list: {self.config.allowed_nodes}"
             )
 
-    def dry_run_response(self, action: str, **params) -> dict:
+    def dry_run_response(self, tool_name: str, **params) -> dict:
         """Return a dry-run response dict."""
         return {
             "status": "dry_run",
-            "action": action,
+            "action": tool_name,
             "params": params,
             "message": (
                 "DRY RUN: This action was NOT executed. "

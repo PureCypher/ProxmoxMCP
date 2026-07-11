@@ -1,22 +1,28 @@
 """Backup and snapshot management tools."""
 
 import logging
+from typing import TYPE_CHECKING
 
 from proxmox_mcp.utils.errors import InvalidParameterError, format_error_response
 from proxmox_mcp.utils.formatters import format_task_result
 from proxmox_mcp.utils.sanitizers import validate_snapname
 from proxmox_mcp.utils.validators import validate_node_name, validate_vmid
 
+if TYPE_CHECKING:
+    from mcp.server.fastmcp import FastMCP
+
+    from proxmox_mcp.client import ProxmoxClient
+
 logger = logging.getLogger("proxmox-mcp")
 
 
-def get_client():
+def get_client() -> "ProxmoxClient":
     from proxmox_mcp.server import proxmox_client
 
     return proxmox_client
 
 
-def get_mcp():
+def get_mcp() -> "FastMCP":
     from proxmox_mcp.server import mcp
 
     return mcp
