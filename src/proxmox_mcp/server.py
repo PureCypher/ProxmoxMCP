@@ -44,6 +44,7 @@ from proxmox_mcp.tools import (  # noqa: E402, F401
     disk,
     network,
     node,
+    pci,
     ssh_tools,
     storage,
     task,

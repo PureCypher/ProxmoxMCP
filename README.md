@@ -1,10 +1,10 @@
 # ProxmoxMCP
 
-MCP (Model Context Protocol) server for managing Proxmox VE infrastructure through AI assistants like Claude. Exposes **91 tools**, **10 resources**, and **6 prompt templates** via FastMCP.
+MCP (Model Context Protocol) server for managing Proxmox VE infrastructure through AI assistants like Claude. Exposes **98 tools**, **10 resources**, and **6 prompt templates** via FastMCP.
 
 ## Features
 
-- **91 tools** across 9 domains: VMs, containers, storage, networking, backups, cluster, nodes, tasks, and disk management
+- **98 tools** across 10 domains: VMs, containers, storage, networking, PCI passthrough, backups, cluster, nodes, tasks, and disk management
 - **Safety guards**: protected VMIDs, node allowlists, dry-run mode, confirmation prompts for destructive operations
 - **Async-first**: all Proxmox API calls run via `asyncio.to_thread()` for non-blocking operation
 - **SSH disk management**: partition, format, mount, and unmount physical disks via SSH
@@ -206,6 +206,18 @@ Add to your Claude Desktop config (`claude_desktop_config.json`):
 | `format_disk` | Format a partition |
 | `create_mount_point` | Mount a filesystem with fstab |
 | `unmount_path` | Unmount and clean up fstab |
+
+### PCI Passthrough (7 tools)
+
+| Tool | Description |
+|------|-------------|
+| `list_node_pci_devices` | List PCI devices on a node (with IOMMU group) |
+| `list_pci_mappings` | List cluster-wide PCI hardware mappings |
+| `create_pci_mapping` | Create a PCI hardware mapping from a node's device |
+| `add_pci_mapping_target` | Add another node's device to an existing mapping |
+| `delete_pci_mapping` | Delete a PCI hardware mapping |
+| `assign_pci_device` | Attach a PCI mapping to a VM's hostpci slot |
+| `remove_pci_device` | Detach a PCI device from a VM's hostpci slot |
 
 ## Configuration Reference
 
