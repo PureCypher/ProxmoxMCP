@@ -4,8 +4,12 @@ import logging
 from typing import TYPE_CHECKING, Any, cast
 
 from proxmox_mcp.utils.errors import InvalidParameterError, format_error_response
-from proxmox_mcp.utils.sanitizers import validate_pci_mapping_id, validate_pci_path
-from proxmox_mcp.utils.validators import validate_node_name
+from proxmox_mcp.utils.sanitizers import (
+    validate_pci_mapping_id,
+    validate_pci_path,
+    validate_pci_slot,
+)
+from proxmox_mcp.utils.validators import validate_node_name, validate_vmid
 
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
@@ -228,5 +232,107 @@ async def delete_pci_mapping(mapping_id: str, confirm: bool = False) -> dict:
         logger.warning("Deleting PCI mapping '%s'", mapping_id)
         await client.api_call(client.api.cluster.mapping.pci(mapping_id).delete)
         return {"status": "success", "mapping_id": mapping_id, "deleted": True}
+    except Exception as e:
+        return format_error_response(e)
+
+
+@mcp.tool()
+async def assign_pci_device(
+    vmid: int,
+    slot: int,
+    mapping_id: str,
+    node: str | None = None,
+    pcie: bool = True,
+    rombar: bool = True,
+    x_vga: bool = False,
+    confirm: bool = False,
+) -> dict:
+    """Attach a PCI hardware mapping to a VM's hostpci slot. Set confirm=True to execute.
+
+    Args:
+        vmid: The VM ID.
+        slot: hostpci slot number (0-15).
+        mapping_id: Name of an existing PCI hardware mapping (see list_pci_mappings).
+        node: The node name. Auto-detected if omitted.
+        pcie: Present as a PCIe device (default True; required for most modern GPUs).
+        rombar: Enable the device's ROM BAR (default True).
+        x_vga: Mark as the VM's primary VGA device (default False).
+        confirm: Must be True to execute.
+    """
+    try:
+        client = get_client()
+        validate_vmid(vmid)
+        validate_pci_slot(slot)
+        validate_pci_mapping_id(mapping_id)
+        client.check_protected(vmid)
+        if not confirm:
+            return {
+                "status": "confirmation_required",
+                "warning": (
+                    f"This will attach PCI mapping '{mapping_id}' to VM {vmid} "
+                    f"as hostpci{slot}."
+                ),
+                "action": "Call assign_pci_device with confirm=True to proceed.",
+            }
+        node = await client.resolve_node(vmid, node)
+        if client.is_dry_run:
+            return client.dry_run_response(
+                "assign_pci_device", vmid=vmid, slot=slot, mapping_id=mapping_id
+            )
+        value = (
+            f"mapping={mapping_id},pcie={1 if pcie else 0},"
+            f"rombar={1 if rombar else 0},x-vga={1 if x_vga else 0}"
+        )
+        kwargs = {f"hostpci{slot}": value}
+        logger.info(
+            "Assigning PCI mapping '%s' to VM %d as hostpci%d", mapping_id, vmid, slot
+        )
+        await client.api_call(client.api.nodes(node).qemu(vmid).config.put, **kwargs)
+        return {
+            "status": "success",
+            "vmid": vmid,
+            "node": node,
+            "slot": slot,
+            "mapping_id": mapping_id,
+            "config_value": value,
+        }
+    except Exception as e:
+        return format_error_response(e)
+
+
+@mcp.tool()
+async def remove_pci_device(
+    vmid: int,
+    slot: int,
+    node: str | None = None,
+    confirm: bool = False,
+) -> dict:
+    """Detach a PCI device from a VM's hostpci slot. Set confirm=True to execute.
+
+    Args:
+        vmid: The VM ID.
+        slot: hostpci slot number (0-15) to clear.
+        node: The node name. Auto-detected if omitted.
+        confirm: Must be True to execute.
+    """
+    try:
+        client = get_client()
+        validate_vmid(vmid)
+        validate_pci_slot(slot)
+        client.check_protected(vmid)
+        if not confirm:
+            return {
+                "status": "confirmation_required",
+                "warning": f"This will remove hostpci{slot} from VM {vmid}.",
+                "action": "Call remove_pci_device with confirm=True to proceed.",
+            }
+        node = await client.resolve_node(vmid, node)
+        if client.is_dry_run:
+            return client.dry_run_response("remove_pci_device", vmid=vmid, slot=slot)
+        logger.warning("Removing hostpci%d from VM %d", slot, vmid)
+        await client.api_call(
+            client.api.nodes(node).qemu(vmid).config.put, delete=f"hostpci{slot}"
+        )
+        return {"status": "success", "vmid": vmid, "node": node, "slot": slot}
     except Exception as e:
         return format_error_response(e)

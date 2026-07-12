@@ -218,3 +218,94 @@ async def test_delete_pci_mapping_invalid_id(mock_client):
 
     result = await delete_pci_mapping(mapping_id="0bad", confirm=True)
     assert result["status"] == "error"
+
+
+# --- assign_pci_device ---
+
+
+@pytest.mark.asyncio
+async def test_assign_pci_device_requires_confirm(mock_client):
+    from proxmox_mcp.tools.pci import assign_pci_device
+
+    result = await assign_pci_device(vmid=100, slot=0, mapping_id="gpu0")
+    assert result["status"] == "confirmation_required"
+
+
+@pytest.mark.asyncio
+async def test_assign_pci_device_confirmed(mock_client):
+    from proxmox_mcp.tools.pci import assign_pci_device
+
+    mock_client.api_call = AsyncMock(return_value=None)
+    result = await assign_pci_device(vmid=100, slot=0, mapping_id="gpu0", confirm=True)
+
+    assert result["status"] == "success"
+    assert result["vmid"] == 100
+    assert result["node"] == "pve1"
+    assert result["slot"] == 0
+    assert "mapping=gpu0" in result["config_value"]
+    assert "pcie=1" in result["config_value"]
+    assert "rombar=1" in result["config_value"]
+    assert "x-vga=0" in result["config_value"]
+
+
+@pytest.mark.asyncio
+async def test_assign_pci_device_protected(mock_client):
+    from proxmox_mcp.tools.pci import assign_pci_device
+    from proxmox_mcp.utils.errors import ProtectedResourceError
+
+    mock_client.check_protected.side_effect = ProtectedResourceError("protected")
+    result = await assign_pci_device(vmid=100, slot=0, mapping_id="gpu0", confirm=True)
+    assert result["status"] == "error"
+
+
+@pytest.mark.asyncio
+async def test_assign_pci_device_invalid_slot(mock_client):
+    from proxmox_mcp.tools.pci import assign_pci_device
+
+    result = await assign_pci_device(vmid=100, slot=99, mapping_id="gpu0", confirm=True)
+    assert result["status"] == "error"
+
+
+@pytest.mark.asyncio
+async def test_assign_pci_device_dry_run(mock_client):
+    from proxmox_mcp.tools.pci import assign_pci_device
+
+    mock_client.is_dry_run = True
+    mock_client.dry_run_response.return_value = {"status": "dry_run"}
+    result = await assign_pci_device(vmid=100, slot=0, mapping_id="gpu0", confirm=True)
+    assert result["status"] == "dry_run"
+
+
+# --- remove_pci_device ---
+
+
+@pytest.mark.asyncio
+async def test_remove_pci_device_requires_confirm(mock_client):
+    from proxmox_mcp.tools.pci import remove_pci_device
+
+    result = await remove_pci_device(vmid=100, slot=0)
+    assert result["status"] == "confirmation_required"
+
+
+@pytest.mark.asyncio
+async def test_remove_pci_device_confirmed(mock_client):
+    from proxmox_mcp.tools.pci import remove_pci_device
+
+    mock_client.api_call = AsyncMock(return_value=None)
+    result = await remove_pci_device(vmid=100, slot=0, confirm=True)
+
+    assert result["status"] == "success"
+    assert result["vmid"] == 100
+    assert result["slot"] == 0
+    call_kwargs = mock_client.api_call.call_args.kwargs
+    assert call_kwargs["delete"] == "hostpci0"
+
+
+@pytest.mark.asyncio
+async def test_remove_pci_device_protected(mock_client):
+    from proxmox_mcp.tools.pci import remove_pci_device
+    from proxmox_mcp.utils.errors import ProtectedResourceError
+
+    mock_client.check_protected.side_effect = ProtectedResourceError("protected")
+    result = await remove_pci_device(vmid=100, slot=0, confirm=True)
+    assert result["status"] == "error"
