@@ -12,6 +12,9 @@ from proxmox_mcp.utils.sanitizers import (
     validate_mount_options,
     validate_mount_path,
     validate_partition_table,
+    validate_pci_mapping_id,
+    validate_pci_path,
+    validate_pci_slot,
     validate_snapname,
     validate_storage_id,
     validate_uuid,
@@ -275,3 +278,51 @@ class TestUUID:
     def test_rejects_too_short(self):
         with pytest.raises(InvalidParameterError):
             validate_uuid("550e8400-e29b-41d4-a716")
+
+
+# --- validate_pci_mapping_id ---
+
+
+class TestPciMappingId:
+    @pytest.mark.parametrize("good_id", ["gpu0", "gpu-nvidia-0", "GPU_0"])
+    def test_valid_mapping_id_passes(self, good_id):
+        validate_pci_mapping_id(good_id)
+
+    @pytest.mark.parametrize(
+        "bad_id",
+        ["0gpu", "gpu;rm -rf", "", "a" * 65, "gpu 0", "gpu$(whoami)"],
+    )
+    def test_rejects_invalid_mapping_id(self, bad_id):
+        with pytest.raises(InvalidParameterError):
+            validate_pci_mapping_id(bad_id)
+
+
+# --- validate_pci_path ---
+
+
+class TestPciPath:
+    @pytest.mark.parametrize("good_path", ["01:00.0", "0000:01:00.0", "3b:00.1", "ff:1f.7"])
+    def test_valid_path_passes(self, good_path):
+        validate_pci_path(good_path)
+
+    @pytest.mark.parametrize(
+        "bad_path",
+        ["01:00", "gpu0", "01:00.0; rm -rf /", "0000:01:00", "01:00.g", ""],
+    )
+    def test_rejects_invalid_path(self, bad_path):
+        with pytest.raises(InvalidParameterError):
+            validate_pci_path(bad_path)
+
+
+# --- validate_pci_slot ---
+
+
+class TestPciSlot:
+    @pytest.mark.parametrize("slot", [0, 1, 8, 15])
+    def test_valid_slot_passes(self, slot):
+        validate_pci_slot(slot)
+
+    @pytest.mark.parametrize("slot", [-1, 16, 100, -100])
+    def test_rejects_out_of_range_slot(self, slot):
+        with pytest.raises(InvalidParameterError):
+            validate_pci_slot(slot)

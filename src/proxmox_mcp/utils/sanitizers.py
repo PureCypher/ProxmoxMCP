@@ -88,6 +88,9 @@ UUID_RE = re.compile(
 
 SNAPNAME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_\-\.]{0,39}$")
 
+PCI_MAPPING_ID_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_\-]{0,63}$")
+PCI_PATH_RE = re.compile(r"^(?:[0-9a-fA-F]{4}:)?[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-9a-fA-F]$")
+
 VALID_FILESYSTEMS = frozenset({"ext4", "xfs", "vfat"})
 VALID_PARTITION_TABLES = frozenset({"gpt", "msdos"})
 
@@ -295,4 +298,33 @@ def validate_script_interpreter(interpreter: str) -> None:
         raise InvalidParameterError(
             f"Interpreter '{interpreter}' is not allowed. "
             f"Allowed: {', '.join(sorted(VALID_SCRIPT_INTERPRETERS))}"
+        )
+
+
+def validate_pci_mapping_id(mapping_id: str) -> None:
+    """Validate a Proxmox PCI hardware mapping identifier."""
+    check_shell_injection(mapping_id, "mapping_id")
+    if not PCI_MAPPING_ID_RE.match(mapping_id):
+        raise InvalidParameterError(
+            f"Mapping ID '{mapping_id}' is invalid. "
+            f"Must start with a letter, contain only alphanumeric/hyphens/underscores, "
+            f"and be at most 64 characters."
+        )
+
+
+def validate_pci_path(path: str) -> None:
+    """Validate a PCI bus address (e.g. '01:00.0' or '0000:01:00.0')."""
+    check_shell_injection(path, "path")
+    if not PCI_PATH_RE.match(path):
+        raise InvalidParameterError(
+            f"PCI path '{path}' is invalid. "
+            f"Must be a bus address like '01:00.0' or '0000:01:00.0'."
+        )
+
+
+def validate_pci_slot(slot: int) -> None:
+    """Validate a hostpci slot number (0-15)."""
+    if not 0 <= slot <= 15:
+        raise InvalidParameterError(
+            f"PCI slot {slot} is invalid. Must be between 0 and 15 (hostpci0-hostpci15)."
         )
