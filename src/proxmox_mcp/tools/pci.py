@@ -204,3 +204,29 @@ async def add_pci_mapping_target(
         }
     except Exception as e:
         return format_error_response(e)
+
+
+@mcp.tool()
+async def delete_pci_mapping(mapping_id: str, confirm: bool = False) -> dict:
+    """Delete a cluster-wide PCI hardware mapping. Set confirm=True to execute.
+
+    Args:
+        mapping_id: Name of the mapping to delete.
+        confirm: Must be True to execute.
+    """
+    try:
+        client = get_client()
+        validate_pci_mapping_id(mapping_id)
+        if not confirm:
+            return {
+                "status": "confirmation_required",
+                "warning": f"This will delete PCI hardware mapping '{mapping_id}'.",
+                "action": "Call delete_pci_mapping with confirm=True to proceed.",
+            }
+        if client.is_dry_run:
+            return client.dry_run_response("delete_pci_mapping", mapping_id=mapping_id)
+        logger.warning("Deleting PCI mapping '%s'", mapping_id)
+        await client.api_call(client.api.cluster.mapping.pci(mapping_id).delete)
+        return {"status": "success", "mapping_id": mapping_id, "deleted": True}
+    except Exception as e:
+        return format_error_response(e)

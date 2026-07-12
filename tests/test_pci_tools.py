@@ -178,3 +178,43 @@ async def test_add_pci_mapping_target_confirmed(mock_client):
 
     assert result["status"] == "success"
     assert result["total_targets"] == 2
+
+
+# --- delete_pci_mapping ---
+
+
+@pytest.mark.asyncio
+async def test_delete_pci_mapping_requires_confirm(mock_client):
+    from proxmox_mcp.tools.pci import delete_pci_mapping
+
+    result = await delete_pci_mapping(mapping_id="gpu0")
+    assert result["status"] == "confirmation_required"
+
+
+@pytest.mark.asyncio
+async def test_delete_pci_mapping_confirmed(mock_client):
+    from proxmox_mcp.tools.pci import delete_pci_mapping
+
+    mock_client.api_call = AsyncMock(return_value=None)
+    result = await delete_pci_mapping(mapping_id="gpu0", confirm=True)
+
+    assert result["status"] == "success"
+    assert result["deleted"] is True
+
+
+@pytest.mark.asyncio
+async def test_delete_pci_mapping_dry_run(mock_client):
+    from proxmox_mcp.tools.pci import delete_pci_mapping
+
+    mock_client.is_dry_run = True
+    mock_client.dry_run_response.return_value = {"status": "dry_run"}
+    result = await delete_pci_mapping(mapping_id="gpu0", confirm=True)
+    assert result["status"] == "dry_run"
+
+
+@pytest.mark.asyncio
+async def test_delete_pci_mapping_invalid_id(mock_client):
+    from proxmox_mcp.tools.pci import delete_pci_mapping
+
+    result = await delete_pci_mapping(mapping_id="0bad", confirm=True)
+    assert result["status"] == "error"
