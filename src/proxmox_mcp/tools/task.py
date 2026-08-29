@@ -16,9 +16,9 @@ logger = logging.getLogger("proxmox-mcp")
 
 
 def get_client() -> "ProxmoxClient":
-    from proxmox_mcp.server import proxmox_client
+    from proxmox_mcp.server import get_server_client
 
-    return proxmox_client
+    return get_server_client()
 
 
 def get_mcp() -> "FastMCP":
@@ -156,22 +156,39 @@ async def wait_for_task(node: str, upid: str, timeout: int = 300, poll_interval:
     Args:
         node: The node where the task is running.
         upid: The unique process ID (UPID) of the task.
-        timeout: Maximum time to wait in seconds (default: 300).
-        poll_interval: Seconds between status checks (default: 5).
+        timeout: Maximum time to wait in seconds (default: 300). Clamped to 1-3600.
+        poll_interval: Seconds between status checks (default: 5). Minimum 1.
 
-    Returns the final task status once completed, or raises a timeout error.
+    Returns the final task status once completed, or returns an error result
+    (status='error', error_type='TaskTimeoutError') on timeout.
     """
     try:
         validate_node_name(node)
         client = get_client()
         client.validate_node(node)
+        if timeout < 1 or timeout > 3600 or poll_interval < 1:
+            logger.warning(
+                "wait_for_task: clamping timeout=%s poll_interval=%s "
+                "-> timeout=%d poll_interval=%d",
+                timeout,
+                poll_interval,
+                min(max(timeout, 1), 3600),
+                max(poll_interval, 1),
+            )
+        timeout = min(max(timeout, 1), 3600)
+        poll_interval = max(poll_interval, 1)
         logger.info(
             "Waiting for task '%s' on node '%s' (timeout=%ds, poll_interval=%ds)",
-            upid, node, timeout, poll_interval,
+            upid,
+            node,
+            timeout,
+            poll_interval,
         )
 
+        loop = asyncio.get_running_loop()
+        start = loop.time()
         elapsed = 0
-        while elapsed < timeout:
+        while elapsed < timeout and loop.time() - start < timeout:
             data = await client.api_call(client.api.nodes(node).tasks(upid).status.get)
             task_status = data.get("status", "")
 
@@ -194,8 +211,7 @@ async def wait_for_task(node: str, upid: str, timeout: int = 300, poll_interval:
         return format_error_response(
             TaskTimeoutError(f"Task '{upid}' did not complete within {timeout} seconds."),
             suggestion=(
-                "Increase the timeout or check the task status manually "
-                "with get_task_status."
+                "Increase the timeout or check the task status manually with get_task_status."
             ),
         )
     except Exception as e:

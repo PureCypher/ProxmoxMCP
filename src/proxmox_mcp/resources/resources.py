@@ -4,6 +4,7 @@
 import json
 import logging
 
+from proxmox_mcp.utils.errors import format_error_response
 from proxmox_mcp.utils.formatters import format_container_summary, format_vm_summary
 
 logger = logging.getLogger("proxmox-mcp")
@@ -32,7 +33,10 @@ async def cluster_status() -> str:
         data = await client.api_call(client.api.cluster.status.get)
         return json.dumps(data, indent=2, default=str)
     except Exception as e:
-        return json.dumps({"error": str(e)}, indent=2)
+        # 'error' key retained for the JSON-string resource contract.
+        payload = format_error_response(e)
+        payload["error"] = payload["message"]
+        return json.dumps(payload, indent=2)
 
 
 @mcp.resource("proxmox://cluster/resources")
@@ -43,7 +47,10 @@ async def cluster_resources() -> str:
         data = await client.api_call(client.api.cluster.resources.get)
         return json.dumps(data, indent=2, default=str)
     except Exception as e:
-        return json.dumps({"error": str(e)}, indent=2)
+        # 'error' key retained for the JSON-string resource contract.
+        payload = format_error_response(e)
+        payload["error"] = payload["message"]
+        return json.dumps(payload, indent=2)
 
 
 @mcp.resource("proxmox://nodes")
@@ -54,7 +61,10 @@ async def nodes_list() -> str:
         data = await client.api_call(client.api.nodes.get)
         return json.dumps(data, indent=2, default=str)
     except Exception as e:
-        return json.dumps({"error": str(e)}, indent=2)
+        # 'error' key retained for the JSON-string resource contract.
+        payload = format_error_response(e)
+        payload["error"] = payload["message"]
+        return json.dumps(payload, indent=2)
 
 
 @mcp.resource("proxmox://node/{node}/status")
@@ -65,7 +75,10 @@ async def node_status(node: str) -> str:
         data = await client.api_call(client.api.nodes(node).status.get)
         return json.dumps(data, indent=2, default=str)
     except Exception as e:
-        return json.dumps({"error": str(e)}, indent=2)
+        # 'error' key retained for the JSON-string resource contract.
+        payload = format_error_response(e)
+        payload["error"] = payload["message"]
+        return json.dumps(payload, indent=2)
 
 
 @mcp.resource("proxmox://vms")
@@ -77,7 +90,10 @@ async def all_vms() -> str:
         vms = [format_vm_summary(r) for r in resources if r.get("type") == "qemu"]
         return json.dumps(vms, indent=2, default=str)
     except Exception as e:
-        return json.dumps({"error": str(e)}, indent=2)
+        # 'error' key retained for the JSON-string resource contract.
+        payload = format_error_response(e)
+        payload["error"] = payload["message"]
+        return json.dumps(payload, indent=2)
 
 
 @mcp.resource("proxmox://containers")
@@ -89,7 +105,10 @@ async def all_containers() -> str:
         cts = [format_container_summary(r) for r in resources if r.get("type") == "lxc"]
         return json.dumps(cts, indent=2, default=str)
     except Exception as e:
-        return json.dumps({"error": str(e)}, indent=2)
+        # 'error' key retained for the JSON-string resource contract.
+        payload = format_error_response(e)
+        payload["error"] = payload["message"]
+        return json.dumps(payload, indent=2)
 
 
 @mcp.resource("proxmox://vm/{vmid}")
@@ -102,7 +121,10 @@ async def vm_detail(vmid: int) -> str:
         config = await client.api_call(client.api.nodes(node).qemu(vmid).config.get)
         return json.dumps({"status": status, "config": config, "node": node}, indent=2, default=str)
     except Exception as e:
-        return json.dumps({"error": str(e)}, indent=2)
+        # 'error' key retained for the JSON-string resource contract.
+        payload = format_error_response(e)
+        payload["error"] = payload["message"]
+        return json.dumps(payload, indent=2)
 
 
 @mcp.resource("proxmox://container/{vmid}")
@@ -115,7 +137,10 @@ async def container_detail(vmid: int) -> str:
         config = await client.api_call(client.api.nodes(node).lxc(vmid).config.get)
         return json.dumps({"status": status, "config": config, "node": node}, indent=2, default=str)
     except Exception as e:
-        return json.dumps({"error": str(e)}, indent=2)
+        # 'error' key retained for the JSON-string resource contract.
+        payload = format_error_response(e)
+        payload["error"] = payload["message"]
+        return json.dumps(payload, indent=2)
 
 
 @mcp.resource("proxmox://storage")
@@ -126,7 +151,10 @@ async def storage_overview() -> str:
         data = await client.api_call(client.api.storage.get)
         return json.dumps(data, indent=2, default=str)
     except Exception as e:
-        return json.dumps({"error": str(e)}, indent=2)
+        # 'error' key retained for the JSON-string resource contract.
+        payload = format_error_response(e)
+        payload["error"] = payload["message"]
+        return json.dumps(payload, indent=2)
 
 
 @mcp.resource("proxmox://tasks/recent")
@@ -142,4 +170,7 @@ async def recent_tasks() -> str:
         all_tasks.sort(key=lambda t: t.get("starttime", 0), reverse=True)
         return json.dumps(all_tasks[:20], indent=2, default=str)
     except Exception as e:
-        return json.dumps({"error": str(e)}, indent=2)
+        # 'error' key retained for the JSON-string resource contract.
+        payload = format_error_response(e)
+        payload["error"] = payload["message"]
+        return json.dumps(payload, indent=2)

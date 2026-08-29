@@ -8,9 +8,16 @@ class ProxmoxMCPError(Exception):
 class ProxmoxConnectionError(ProxmoxMCPError):
     """Failed to connect to Proxmox host."""
 
+    default_suggestion = (
+        "Check PROXMOX_HOST/PROXMOX_PORT and that the node is reachable "
+        "(network, firewall, service)."
+    )
+
 
 class AuthenticationError(ProxmoxMCPError):
     """Authentication with Proxmox failed."""
+
+    default_suggestion = "Check PROXMOX_TOKEN_NAME/VALUE or PROXMOX_USER/PASSWORD."
 
 
 class VMNotFoundError(ProxmoxMCPError):
@@ -62,12 +69,18 @@ class DeviceInUseError(ProxmoxMCPError):
 
 
 def format_error_response(error: Exception, suggestion: str | None = None) -> dict:
-    """Format any exception into a structured error response dict."""
+    """Format any exception into a structured error response dict.
+
+    Falls back to the exception class's `default_suggestion` (when defined)
+    if no explicit suggestion is given.
+    """
     result = {
         "status": "error",
         "error_type": type(error).__name__,
         "message": str(error),
     }
+    if suggestion is None:
+        suggestion = getattr(type(error), "default_suggestion", None)
     if suggestion:
         result["suggestion"] = suggestion
     return result

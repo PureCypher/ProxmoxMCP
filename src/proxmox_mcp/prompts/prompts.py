@@ -42,7 +42,13 @@ def capacity_planning() -> str:
 
 @mcp.prompt()
 def vm_deployment(name: str, purpose: str, os: str = "linux") -> str:
-    """Generate a prompt for deploying a new VM with best practices."""
+    """Generate a prompt for deploying a new VM with best practices.
+
+    Args:
+        name: The name for the new VM.
+        purpose: What the VM is for (e.g., 'web server', 'build runner').
+        os: Operating system flavor; 'linux' (default) or 'windows'.
+    """
     return (
         f"Help me deploy a new VM with these requirements:\n"
         f"- Name: {name}\n"
@@ -90,7 +96,11 @@ def security_audit() -> str:
 
 @mcp.prompt()
 def troubleshoot_vm(vmid: int) -> str:
-    """Generate a prompt for troubleshooting a problematic VM."""
+    """Generate a prompt for troubleshooting a problematic VM.
+
+    Args:
+        vmid: The numeric VMID of the VM to troubleshoot.
+    """
     return (
         f"Troubleshoot VM {vmid}:\n"
         "1. Get current status and any error states\n"

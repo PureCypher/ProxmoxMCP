@@ -3,7 +3,7 @@
 import logging
 from typing import TYPE_CHECKING
 
-from proxmox_mcp.utils.errors import format_error_response
+from proxmox_mcp.utils.errors import InvalidParameterError, format_error_response
 from proxmox_mcp.utils.formatters import format_bytes, format_task_result, format_uptime
 from proxmox_mcp.utils.validators import validate_node_name
 
@@ -16,9 +16,9 @@ logger = logging.getLogger("proxmox-mcp")
 
 
 def get_client() -> "ProxmoxClient":
-    from proxmox_mcp.server import proxmox_client
+    from proxmox_mcp.server import get_server_client
 
-    return proxmox_client
+    return get_server_client()
 
 
 def get_mcp() -> "FastMCP":
@@ -177,23 +177,39 @@ async def get_node_storage(node: str) -> dict:
 
 
 @mcp.tool()
-async def get_node_syslog(node: str, limit: int = 50, since: str | None = None) -> dict:
+async def get_node_syslog(
+    node: str,
+    limit: int = 50,
+    since: str | int | None = None,
+) -> dict:
     """Read syslog entries from a specific node.
 
     Args:
         node: The name of the Proxmox node (e.g., 'pve1').
-        limit: Maximum number of log lines to return (default: 50).
-        since: Optional start date/time filter (e.g., '2024-01-01' or '2024-01-01 12:00:00').
+        limit: Maximum number of log lines to return (default: 50). Clamped to 10000.
+        since: Optional timestamp filter as unix epoch seconds (e.g., 1704067200).
     """
     try:
         validate_node_name(node)
         client = get_client()
         client.validate_node(node)
-        logger.info("Fetching syslog for node '%s' (limit=%d, since=%s)", node, limit, since)
 
-        kwargs = {"limit": limit}
-        if since:
-            kwargs["since"] = since
+        since_value: str | int | None = None
+        if since is not None:
+            if isinstance(since, int) or (isinstance(since, str) and since.isdigit()):
+                since_value = int(since)
+            else:
+                raise InvalidParameterError(
+                    f"'since' must be unix epoch seconds, got '{since}' "
+                    "(e.g. 1704067200), not a date string."
+                )
+
+        limit = min(max(limit, 1), 10000)
+        logger.info("Fetching syslog for node '%s' (limit=%d, since=%s)", node, limit, since_value)
+
+        kwargs: dict = {"limit": limit}
+        if since_value is not None:
+            kwargs["since"] = since_value
 
         data = await client.api_call(client.api.nodes(node).syslog.get, **kwargs)
 
@@ -232,9 +248,7 @@ async def reboot_node(node: str, confirm: bool = False) -> dict:
         if client.is_dry_run:
             return client.dry_run_response("reboot_node", node=node)
         logger.warning("Rebooting node '%s'", node)
-        upid = await client.api_call(
-            client.api.nodes(node).status.post, command="reboot"
-        )
+        upid = await client.api_call(client.api.nodes(node).status.post, command="reboot")
         return format_task_result({"data": upid})
     except Exception as e:
         logger.error("Failed to reboot node '%s': %s", node, e)
@@ -266,9 +280,7 @@ async def shutdown_node(node: str, confirm: bool = False) -> dict:
         if client.is_dry_run:
             return client.dry_run_response("shutdown_node", node=node)
         logger.warning("Shutting down node '%s'", node)
-        upid = await client.api_call(
-            client.api.nodes(node).status.post, command="shutdown"
-        )
+        upid = await client.api_call(client.api.nodes(node).status.post, command="shutdown")
         return format_task_result({"data": upid})
     except Exception as e:
         logger.error("Failed to shut down node '%s': %s", node, e)

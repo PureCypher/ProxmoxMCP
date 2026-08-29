@@ -2,17 +2,24 @@
 
 import asyncio
 import logging
+import socket
+import threading
+import time
 from collections.abc import Callable
 from typing import TypeVar
 
+import requests.exceptions  # type: ignore[import-untyped]
 from proxmoxer import ProxmoxAPI
+from proxmoxer.core import ResourceException
 
 from proxmox_mcp.config import ProxmoxConfig
 from proxmox_mcp.utils.errors import (
     AuthenticationError,
+    InsufficientPermissionsError,
     NodeNotAllowedError,
     ProtectedResourceError,
     ProxmoxConnectionError,
+    ProxmoxMCPError,
     VMNotFoundError,
 )
 from proxmox_mcp.utils.validators import validate_node_name
@@ -21,6 +28,9 @@ logger = logging.getLogger("proxmox-mcp")
 
 T = TypeVar("T")
 
+# TTL (seconds) for the vmid -> node resolution cache.
+_NODE_CACHE_TTL = 30
+
 
 class ProxmoxClient:
     """Wrapper around proxmoxer.ProxmoxAPI with async support and safety guards."""
@@ -28,6 +38,8 @@ class ProxmoxClient:
     def __init__(self, config: ProxmoxConfig) -> None:
         self.config = config
         self._api = self._connect(config)
+        self._node_cache: dict[int, tuple[str, float]] = {}
+        self._node_cache_lock = threading.Lock()
 
     @staticmethod
     def _connect(config: ProxmoxConfig) -> ProxmoxAPI:
@@ -48,7 +60,12 @@ class ProxmoxClient:
                 kwargs["user"] = user
                 kwargs["token_name"] = token_id
             else:
-                kwargs["user"] = config.PROXMOX_USER or ""
+                if not config.PROXMOX_USER:
+                    raise AuthenticationError(
+                        "PROXMOX_TOKEN_NAME must be in 'user@realm!tokenid' format "
+                        "or PROXMOX_USER must be set."
+                    )
+                kwargs["user"] = config.PROXMOX_USER
                 kwargs["token_name"] = token_name
             kwargs["token_value"] = config.PROXMOX_TOKEN_VALUE
         elif config.PROXMOX_USER and config.PROXMOX_PASSWORD:
@@ -73,15 +90,77 @@ class ProxmoxClient:
         try:
             return await asyncio.to_thread(func, *args, **kwargs)
         except Exception as e:
-            error_str = str(e).lower()
-            if "401" in error_str or "authentication" in error_str:
-                raise AuthenticationError(f"Proxmox authentication failed: {e}") from e
-            if "connection" in error_str or "timeout" in error_str:
-                raise ProxmoxConnectionError(f"Proxmox connection error: {e}") from e
-            raise
+            raise self._translate_api_error(e) from e
+
+    @staticmethod
+    def _translate_api_error(e: Exception) -> Exception:
+        """Classify a proxmoxer/network exception into the ProxmoxMCP hierarchy.
+
+        Branches on the HTTP status code when available; raw response bodies are
+        not echoed into error messages to avoid leaking hostnames/details.
+        """
+        if isinstance(e, ResourceException):
+            code = getattr(e, "status_code", None)
+            if code == 401:
+                return AuthenticationError(
+                    "Proxmox authentication failed (HTTP 401). "
+                    "Check PROXMOX_TOKEN_NAME/VALUE or PROXMOX_USER/PASSWORD."
+                )
+            if code == 403:
+                return InsufficientPermissionsError(
+                    "Insufficient Proxmox permissions for this operation (HTTP 403)."
+                )
+            if isinstance(code, int) and code >= 400:
+                return ProxmoxMCPError(
+                    f"Proxmox API error (HTTP {code}). Check the Proxmox node logs for details."
+                )
+            return ProxmoxMCPError(f"Unexpected Proxmox API error (HTTP {code}).")
+        if isinstance(
+            e,
+            (requests.exceptions.RequestException, ConnectionError, TimeoutError, socket.timeout),
+        ):
+            return ProxmoxConnectionError(
+                "Could not reach the Proxmox API. "
+                "Check PROXMOX_HOST/PROXMOX_PORT and that the node is reachable."
+            )
+        # Last-resort fallback for unexpected exception types.
+        error_str = str(e).lower()
+        if "401" in error_str or "authentication" in error_str:
+            return AuthenticationError(
+                "Proxmox authentication failed. "
+                "Check PROXMOX_TOKEN_NAME/VALUE or PROXMOX_USER/PASSWORD."
+            )
+        if "connection" in error_str or "timeout" in error_str:
+            return ProxmoxConnectionError(
+                "Could not reach the Proxmox API. "
+                "Check PROXMOX_HOST/PROXMOX_PORT and that the node is reachable."
+            )
+        return e
 
     async def resolve_node_for_vmid(self, vmid: int) -> str:
-        """Query cluster resources to find which node owns this VMID."""
+        """Query cluster resources to find which node owns this VMID.
+
+        Results are cached for a short TTL to avoid a full cluster scan per call.
+        """
+        now = time.monotonic()
+        with self._node_cache_lock:
+            entry = self._node_cache.get(vmid)
+            if entry is not None:
+                node, stamped = entry
+                if now - stamped < _NODE_CACHE_TTL:
+                    return node
+        try:
+            node = await self._query_node_for_vmid(vmid)
+        except VMNotFoundError:
+            with self._node_cache_lock:
+                self._node_cache.pop(vmid, None)
+            raise
+        with self._node_cache_lock:
+            self._node_cache[vmid] = (node, now)
+        return node
+
+    async def _query_node_for_vmid(self, vmid: int) -> str:
+        """Fetch the owning node for a VMID from cluster resources (uncached)."""
         resources = await self.api_call(self._api.cluster.resources.get, type="vm")
         for r in resources:
             if r.get("vmid") == vmid:
@@ -118,8 +197,7 @@ class ProxmoxClient:
             "action": tool_name,
             "params": params,
             "message": (
-                "DRY RUN: This action was NOT executed. "
-                "Set PROXMOX_DRY_RUN=false to perform."
+                "DRY RUN: This action was NOT executed. Set PROXMOX_DRY_RUN=false to perform."
             ),
         }
 

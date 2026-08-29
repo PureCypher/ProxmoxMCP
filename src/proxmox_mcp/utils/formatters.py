@@ -39,11 +39,12 @@ def format_container_summary(ct_data: dict) -> dict:
 
 def format_bytes(bytes_val: int) -> str:
     """Human-readable byte formatting."""
+    value: float = bytes_val
     for unit in ["B", "KB", "MB", "GB", "TB"]:
-        if bytes_val < 1024:
-            return f"{bytes_val:.1f} {unit}"
-        bytes_val /= 1024
-    return f"{bytes_val:.1f} PB"
+        if value < 1024:
+            return f"{value:.1f} {unit}"
+        value /= 1024
+    return f"{value:.1f} PB"
 
 
 def format_uptime(seconds: int) -> str:
@@ -60,7 +61,6 @@ def format_task_result(task_data: dict) -> dict:
         "task_upid": task_data.get("upid") or task_data.get("data"),
         "status": "submitted",
         "message": (
-            "Task submitted successfully. "
-            "Use get_task_status with the UPID to track progress."
+            "Task submitted successfully. Use get_task_status with the UPID to track progress."
         ),
     }
