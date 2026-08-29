@@ -11,3 +11,6 @@ build/
 .ruff_cache/
 .coverage
 docs/.DS_Store
+
+# Local Jcode MCP config (contains live PVE credentials)
+.jcode/mcp.json
