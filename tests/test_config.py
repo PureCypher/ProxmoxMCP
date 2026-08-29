@@ -52,3 +52,17 @@ def test_config_requires_host(monkeypatch):
     monkeypatch.delenv("PROXMOX_HOST", raising=False)
     with pytest.raises(ValidationError):
         ProxmoxConfig(_env_file=None)
+
+
+def test_conftest_defaults_do_not_mask_missing_host(monkeypatch):
+    """conftest sets dummy env via setdefault, so an explicitly missing
+    PROXMOX_HOST must still fail loudly."""
+    import os
+
+    from proxmox_mcp.config import ProxmoxConfig
+
+    assert os.environ.get("PROXMOX_HOST") == "test"
+    # Simulate a fresh env where the variable truly is absent.
+    monkeypatch.delenv("PROXMOX_HOST", raising=False)
+    with pytest.raises(ValidationError):
+        ProxmoxConfig(_env_file=None)

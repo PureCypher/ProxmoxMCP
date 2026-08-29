@@ -274,11 +274,77 @@ async def test_wait_for_task_completes_after_polls(mock_client):
 
     with patch("proxmox_mcp.tools.task.get_client", return_value=mock_client):
         with patch("proxmox_mcp.tools.task.asyncio.sleep", new_callable=AsyncMock):
-            result = await wait_for_task("pve1", upid, timeout=30, poll_interval=2)
+            with patch("proxmox_mcp.tools.task.asyncio.get_running_loop") as mock_loop:
+                # Emulate a frozen wall clock: only the accumulated poll
+                # interval elapses, so the deadline is not hit early.
+                loop_time = [0.0]
+
+                def fake_time():
+                    return loop_time[0]
+
+                mock_loop.return_value.time = fake_time
+                # Advance the clock by the poll interval on each sleep.
+                original_sleep = AsyncMock()
+
+                async def fake_sleep(seconds):
+                    loop_time[0] += seconds
+
+                original_sleep.side_effect = fake_sleep
+                with patch("proxmox_mcp.tools.task.asyncio.sleep", original_sleep):
+                    result = await wait_for_task("pve1", upid, timeout=30, poll_interval=2)
 
     assert result["status"] == "success"
     assert result["task_status"]["exitstatus"] == "OK"
     assert result["elapsed_seconds"] == 4  # 2 polls * 2s interval
+
+
+@pytest.mark.asyncio
+async def test_wait_for_task_clamps_poll_interval_zero_and_short_timeout(mock_client):
+    """poll_interval=0 and huge/small timeouts are clamped; no infinite spin."""
+    from proxmox_mcp.tools.task import wait_for_task
+
+    upid = "UPID:pve1:00001234:abcdef:6500ABCD:qmstart:100:root@pam:"
+    # Always returns running.
+    mock_client.api_call.return_value = {"status": "running"}
+
+    with patch("proxmox_mcp.tools.task.get_client", return_value=mock_client):
+        with patch("proxmox_mcp.tools.task.asyncio.sleep", new_callable=AsyncMock):
+            # timeout=0 clamps to 1s; poll_interval=0 clamps to 1s.
+            result = await wait_for_task("pve1", upid, timeout=0, poll_interval=0)
+
+    assert result["status"] == "error"
+    assert result["error_type"] == "TaskTimeoutError"
+
+
+@pytest.mark.asyncio
+async def test_wait_for_task_huge_timeout_clamped(mock_client):
+    """timeout > 3600 is clamped to 3600 (wall-clock deadline, no drift)."""
+    from proxmox_mcp.tools.task import wait_for_task
+
+    upid = "UPID:pve1:00001234:abcdef:6500ABCD:qmstart:100:root@pam:"
+    mock_client.api_call.return_value = {"status": "running"}
+
+    with patch("proxmox_mcp.tools.task.get_client", return_value=mock_client):
+        with patch("proxmox_mcp.tools.task.asyncio.sleep", new_callable=AsyncMock):
+            with patch("proxmox_mcp.tools.task.asyncio.get_running_loop") as mock_loop:
+                loop_time = [0.0]
+
+                def fake_time():
+                    return loop_time[0]
+
+                mock_loop.return_value.time = fake_time
+
+                async def fake_sleep(seconds):
+                    loop_time[0] += seconds
+
+                with patch("proxmox_mcp.tools.task.asyncio.sleep", side_effect=fake_sleep):
+                    result = await wait_for_task("pve1", upid, timeout=999999, poll_interval=60)
+
+    assert result["status"] == "error"
+    assert result["error_type"] == "TaskTimeoutError"
+    # 61 polls of a 60s interval = 3660s accumulated > clamped 3600s, but the
+    # wall-clock condition (only 3600s advanced) still bounds the wait.
+    assert "3600" in result["message"]
 
 
 @pytest.mark.asyncio

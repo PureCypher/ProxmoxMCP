@@ -244,9 +244,7 @@ class TestPartitionDisk:
             SSHResult(exit_code=0, stdout="exists", stderr=""),  # test -b
             SSHResult(exit_code=0, stdout="", stderr=""),  # lsblk mounts
             SSHResult(exit_code=1, stdout="", stderr=""),  # findmnt (not mounted)
-            SSHResult(exit_code=1, stdout="", stderr=""),  # pvs (no LVM)
-            SSHResult(exit_code=1, stdout="", stderr=""),  # zpool (no ZFS)
-            SSHResult(exit_code=1, stdout="", stderr=""),  # mdstat (no RAID)
+            SSHResult(exit_code=0, stdout="---END---", stderr=""),  # LVM/ZFS/MD combined (none)
         ]
 
         with (
@@ -265,9 +263,7 @@ class TestPartitionDisk:
             SSHResult(exit_code=0, stdout="exists", stderr=""),  # test -b
             SSHResult(exit_code=0, stdout="", stderr=""),  # lsblk mounts
             SSHResult(exit_code=1, stdout="", stderr=""),  # findmnt
-            SSHResult(exit_code=1, stdout="", stderr=""),  # pvs
-            SSHResult(exit_code=1, stdout="", stderr=""),  # zpool
-            SSHResult(exit_code=1, stdout="", stderr=""),  # mdstat
+            SSHResult(exit_code=0, stdout="---END---", stderr=""),  # LVM/ZFS/MD combined (none)
             SSHResult(exit_code=0, stdout="", stderr=""),  # wipefs
             SSHResult(exit_code=0, stdout="", stderr=""),  # sgdisk (GPT + partition)
             SSHResult(exit_code=0, stdout="", stderr=""),  # blockdev --rereadpt

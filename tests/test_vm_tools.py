@@ -350,9 +350,7 @@ async def test_set_vm_cloudinit(mock_client):
     from proxmox_mcp.tools.vm import set_vm_cloudinit
 
     mock_client.api_call = AsyncMock(return_value=None)
-    result = await set_vm_cloudinit(
-        vmid=100, ciuser="admin", ipconfig0="ip=dhcp"
-    )
+    result = await set_vm_cloudinit(vmid=100, ciuser="admin", ipconfig0="ip=dhcp")
     assert result["status"] == "success"
     assert "ciuser" in result["changes"]
     assert "ipconfig0" in result["changes"]
@@ -394,3 +392,92 @@ async def test_regenerate_cloudinit_image_protected(mock_client):
     mock_client.check_protected.side_effect = ProtectedResourceError("protected")
     result = await regenerate_cloudinit_image(vmid=100)
     assert result["status"] == "error"
+
+
+# ---------------------------------------------------------------------------
+# Regression tests (phase 3)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_start_vm_timeout_forwarded(mock_client):
+    from proxmox_mcp.tools.vm import start_vm
+
+    mock_client.api_call = AsyncMock(return_value="UPID:x")
+    result = await start_vm(vmid=100, timeout=45)
+    assert result["status"] == "submitted"
+    _, kwargs = mock_client.api_call.call_args
+    assert kwargs.get("timeout") == 45
+
+
+@pytest.mark.asyncio
+async def test_shutdown_vm_no_dead_timeout_kwarg(mock_client):
+    from proxmox_mcp.tools.vm import shutdown_vm
+
+    mock_client.api_call = AsyncMock(return_value="UPID:x")
+    result = await shutdown_vm(vmid=100)
+    assert result["status"] == "submitted"
+    _, kwargs = mock_client.api_call.call_args
+    assert "timeout" not in kwargs
+
+
+@pytest.mark.asyncio
+async def test_modify_vm_config_int_kwargs(mock_client):
+    from proxmox_mcp.tools.vm import modify_vm_config
+
+    mock_client.api_call = AsyncMock(return_value=None)
+    result = await modify_vm_config(vmid=100, memory="8192", cores="4", sockets="2", balloon="2048")
+    assert result["status"] == "success"
+    kwargs = mock_client.api_call.call_args.kwargs
+    assert kwargs["memory"] == 8192 and isinstance(kwargs["memory"], int)
+    assert kwargs["cores"] == 4 and isinstance(kwargs["cores"], int)
+    assert kwargs["sockets"] == 2 and isinstance(kwargs["sockets"], int)
+    assert kwargs["balloon"] == 2048 and isinstance(kwargs["balloon"], int)
+
+
+@pytest.mark.asyncio
+async def test_modify_vm_config_long_value_rejected(mock_client):
+    from proxmox_mcp.tools.vm import modify_vm_config
+
+    mock_client.api_call = AsyncMock(return_value=None)
+    result = await modify_vm_config(vmid=100, extra_config='{"tags": "%s"}' % ("a" * 4097))
+    assert result["status"] == "error"
+    assert result["error_type"] == "InvalidParameterError"
+    mock_client.api_call.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_list_vms_invalid_status_filter(mock_client):
+    from proxmox_mcp.tools.vm import list_vms
+
+    mock_client.api_call = AsyncMock(return_value=[])
+    result = await list_vms(status_filter="bogus")
+    assert result["status"] == "error"
+    assert result["error_type"] == "InvalidParameterError"
+    mock_client.api_call.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_get_vm_rrd_data_invalid_timeframe(mock_client):
+    from proxmox_mcp.tools.vm import get_vm_rrd_data
+
+    mock_client.api_call = AsyncMock(return_value=[])
+    result = await get_vm_rrd_data(vmid=100, timeframe="fortnight")
+    assert result["status"] == "error"
+    assert result["error_type"] == "InvalidParameterError"
+    mock_client.api_call.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_list_vms_empty_not_silent(mock_client):
+    """Unknown status_filter must error, and a valid filter on empty result succeeds."""
+    from proxmox_mcp.tools.vm import list_vms
+
+    mock_client.api_call = AsyncMock(return_value=[])
+    result = await list_vms(status_filter="paused")
+    assert result["status"] == "success"
+    assert result["total"] == 0
+    result = await list_vms(status_filter="nonexistent")
+    assert result["status"] == "error"
+    assert "bogus" not in result.get("message", "")
+    assert "nonexistent" in result["message"]

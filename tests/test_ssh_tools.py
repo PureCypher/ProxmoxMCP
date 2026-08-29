@@ -40,15 +40,11 @@ def _patch_tools(mock_client, mock_ssh, mock_interfaces=None):
                 "result": [
                     {
                         "name": "lo",
-                        "ip-addresses": [
-                            {"ip-address": "127.0.0.1", "ip-address-type": "ipv4"}
-                        ],
+                        "ip-addresses": [{"ip-address": "127.0.0.1", "ip-address-type": "ipv4"}],
                     },
                     {
                         "name": "eth0",
-                        "ip-addresses": [
-                            {"ip-address": "10.0.0.100", "ip-address-type": "ipv4"}
-                        ],
+                        "ip-addresses": [{"ip-address": "10.0.0.100", "ip-address-type": "ipv4"}],
                     },
                 ]
             }
@@ -79,9 +75,7 @@ class TestResolveVmIp:
             "result": [
                 {
                     "name": "lo",
-                    "ip-addresses": [
-                        {"ip-address": "127.0.0.1", "ip-address-type": "ipv4"}
-                    ],
+                    "ip-addresses": [{"ip-address": "127.0.0.1", "ip-address-type": "ipv4"}],
                 },
                 {
                     "name": "eth0",
@@ -103,9 +97,7 @@ class TestResolveVmIp:
             "result": [
                 {
                     "name": "lo",
-                    "ip-addresses": [
-                        {"ip-address": "127.0.0.1", "ip-address-type": "ipv4"}
-                    ],
+                    "ip-addresses": [{"ip-address": "127.0.0.1", "ip-address-type": "ipv4"}],
                 },
                 {
                     "name": "eth0",
@@ -142,7 +134,7 @@ class TestResolveVmIp:
         from proxmox_mcp.ssh import SSHExecutionError
         from proxmox_mcp.tools.ssh_tools import _resolve_vm_ip
 
-        mock_client.api_call = AsyncMock(side_effect=Exception("not found"))
+        mock_client.api_call = AsyncMock(side_effect=Exception("404: not found"))
 
         with pytest.raises(SSHExecutionError, match="Cannot discover IP"):
             await _resolve_vm_ip(mock_client, 999, "pve1")
@@ -159,7 +151,7 @@ class TestInstallPackage:
 
         # First call: detect package manager
         mock_ssh.execute_on_host.side_effect = [
-            SSHResult(exit_code=0, stdout="found\n", stderr=""),  # apt-get detected
+            SSHResult(exit_code=0, stdout="/usr/bin/apt-get\n", stderr=""),  # apt-get detected
             SSHResult(exit_code=0, stdout="Reading package lists...\nDone\n", stderr=""),  # install
         ]
 
@@ -193,7 +185,7 @@ class TestInstallPackage:
         from proxmox_mcp.tools.ssh_tools import install_package
 
         mock_ssh.execute_on_host.side_effect = [
-            SSHResult(exit_code=0, stdout="found\n", stderr=""),  # apt-get detected
+            SSHResult(exit_code=0, stdout="/usr/bin/apt-get\n", stderr=""),  # apt-get detected
             SSHResult(exit_code=0, stdout="Removing nginx...\n", stderr=""),  # remove
         ]
 
@@ -207,14 +199,12 @@ class TestInstallPackage:
         from proxmox_mcp.tools.ssh_tools import install_package
 
         mock_ssh.execute_on_host.side_effect = [
-            SSHResult(exit_code=0, stdout="found\n", stderr=""),
+            SSHResult(exit_code=0, stdout="/usr/bin/apt-get\n", stderr=""),
             SSHResult(exit_code=0, stdout="Done\n", stderr=""),
         ]
 
         with _patch_tools(mock_client, mock_ssh):
-            result = await install_package(
-                vmid=100, packages=["git"], target_ip="192.168.1.50"
-            )
+            result = await install_package(vmid=100, packages=["git"], target_ip="192.168.1.50")
 
         assert result["status"] == "success"
         assert result["target_ip"] == "192.168.1.50"
@@ -223,7 +213,7 @@ class TestInstallPackage:
         from proxmox_mcp.tools.ssh_tools import install_package
 
         mock_ssh.execute_on_host.side_effect = [
-            SSHResult(exit_code=0, stdout="found\n", stderr=""),
+            SSHResult(exit_code=0, stdout="/usr/bin/apt-get\n", stderr=""),
             SSHResult(exit_code=0, stdout="Done\n", stderr=""),
         ]
 
@@ -245,8 +235,7 @@ class TestInstallPackage:
         from proxmox_mcp.tools.ssh_tools import install_package
 
         mock_ssh.execute_on_host.side_effect = [
-            SSHResult(exit_code=1, stdout="", stderr=""),  # apt-get not found
-            SSHResult(exit_code=0, stdout="found\n", stderr=""),  # dnf found
+            SSHResult(exit_code=0, stdout="/usr/bin/dnf\n", stderr=""),  # single probe: dnf
             SSHResult(exit_code=0, stdout="Complete!\n", stderr=""),  # install
         ]
 
@@ -256,11 +245,29 @@ class TestInstallPackage:
         assert result["status"] == "success"
         assert result["package_manager"] == "dnf"
 
+    async def test_install_apt_single_probe(self, mock_client, mock_ssh):
+        from proxmox_mcp.tools.ssh_tools import install_package
+
+        mock_ssh.execute_on_host.side_effect = [
+            SSHResult(exit_code=0, stdout="/usr/bin/apt-get\n", stderr=""),
+            SSHResult(exit_code=0, stdout="Done\n", stderr=""),
+        ]
+
+        with _patch_tools(mock_client, mock_ssh):
+            result = await install_package(vmid=100, packages=["curl"])
+
+        assert result["status"] == "success"
+        assert result["package_manager"] == "apt"
+        assert mock_ssh.execute_on_host.call_count == 2
+        # The first command must be the single combined probe
+        probe_cmd = mock_ssh.execute_on_host.call_args_list[0][0][1]
+        assert "command -v apt-get dnf yum apk zypper pacman" in probe_cmd
+
     async def test_install_failure(self, mock_client, mock_ssh):
         from proxmox_mcp.tools.ssh_tools import install_package
 
         mock_ssh.execute_on_host.side_effect = [
-            SSHResult(exit_code=0, stdout="found\n", stderr=""),  # apt detected
+            SSHResult(exit_code=0, stdout="/usr/bin/apt-get\n", stderr=""),  # apt detected
             SSHResult(exit_code=100, stdout="", stderr="E: Unable to locate package foobar"),
         ]
 
@@ -280,9 +287,7 @@ class TestManageService:
     async def test_start_service(self, mock_client, mock_ssh):
         from proxmox_mcp.tools.ssh_tools import manage_service
 
-        mock_ssh.execute_on_host.return_value = SSHResult(
-            exit_code=0, stdout="", stderr=""
-        )
+        mock_ssh.execute_on_host.return_value = SSHResult(exit_code=0, stdout="", stderr="")
 
         with _patch_tools(mock_client, mock_ssh):
             result = await manage_service(vmid=100, service="nginx", action="start")
@@ -348,9 +353,7 @@ class TestTransferFile:
     async def test_transfer_success(self, mock_client, mock_ssh):
         from proxmox_mcp.tools.ssh_tools import transfer_file
 
-        mock_ssh.execute_on_host.return_value = SSHResult(
-            exit_code=0, stdout="", stderr=""
-        )
+        mock_ssh.execute_on_host.return_value = SSHResult(exit_code=0, stdout="", stderr="")
 
         with _patch_tools(mock_client, mock_ssh):
             result = await transfer_file(
@@ -367,9 +370,7 @@ class TestTransferFile:
     async def test_transfer_with_owner(self, mock_client, mock_ssh):
         from proxmox_mcp.tools.ssh_tools import transfer_file
 
-        mock_ssh.execute_on_host.return_value = SSHResult(
-            exit_code=0, stdout="", stderr=""
-        )
+        mock_ssh.execute_on_host.return_value = SSHResult(exit_code=0, stdout="", stderr="")
 
         with _patch_tools(mock_client, mock_ssh):
             result = await transfer_file(
@@ -384,7 +385,7 @@ class TestTransferFile:
         assert result["owner"] == "www-data:www-data"
         # Verify chown is in the command
         cmd = mock_ssh.execute_on_host.call_args[0][1]
-        assert "chown www-data:www-data" in cmd
+        assert 'chown www-data:www-data "$TMPF"' in cmd
 
     async def test_transfer_invalid_path(self, mock_client, mock_ssh):
         from proxmox_mcp.tools.ssh_tools import transfer_file
@@ -444,6 +445,7 @@ class TestExecuteScript:
             result = await execute_script(
                 vmid=100,
                 script='echo "Hello World"',
+                confirm=True,
             )
 
         assert result["status"] == "success"
@@ -454,15 +456,14 @@ class TestExecuteScript:
     async def test_script_python(self, mock_client, mock_ssh):
         from proxmox_mcp.tools.ssh_tools import execute_script
 
-        mock_ssh.execute_on_host.return_value = SSHResult(
-            exit_code=0, stdout="42\n", stderr=""
-        )
+        mock_ssh.execute_on_host.return_value = SSHResult(exit_code=0, stdout="42\n", stderr="")
 
         with _patch_tools(mock_client, mock_ssh):
             result = await execute_script(
                 vmid=100,
                 script="print(6 * 7)",
                 interpreter="python3",
+                confirm=True,
             )
 
         assert result["status"] == "success"
@@ -498,7 +499,7 @@ class TestExecuteScript:
         )
 
         with _patch_tools(mock_client, mock_ssh):
-            result = await execute_script(vmid=100, script="nonexistent_command")
+            result = await execute_script(vmid=100, script="nonexistent_command", confirm=True)
 
         assert result["status"] == "error"
         assert result["exit_code"] == 1
@@ -506,12 +507,10 @@ class TestExecuteScript:
     async def test_script_timeout_clamped(self, mock_client, mock_ssh):
         from proxmox_mcp.tools.ssh_tools import execute_script
 
-        mock_ssh.execute_on_host.return_value = SSHResult(
-            exit_code=0, stdout="ok\n", stderr=""
-        )
+        mock_ssh.execute_on_host.return_value = SSHResult(exit_code=0, stdout="ok\n", stderr="")
 
         with _patch_tools(mock_client, mock_ssh):
-            result = await execute_script(vmid=100, script="echo ok", timeout=999)
+            result = await execute_script(vmid=100, script="echo ok", timeout=999, confirm=True)
 
         assert result["status"] == "success"
         # Verify timeout was clamped to 120
@@ -537,7 +536,7 @@ class TestGetSystemInfo:
                 "---OS---\n"
                 'PRETTY_NAME="Debian GNU/Linux 12 (bookworm)"\n'
                 'NAME="Debian GNU/Linux"\n'
-                'ID=debian\n'
+                "ID=debian\n"
                 "---KERNEL---\n"
                 "6.1.0-18-amd64\n"
                 "---ARCH---\n"

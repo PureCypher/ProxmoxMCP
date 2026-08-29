@@ -357,7 +357,10 @@ async def test_create_user(mock_client):
 
     with patch("proxmox_mcp.tools.cluster.get_client", return_value=mock_client):
         result = await create_user(
-            userid="john@pve", password="secret", email="john@example.com"
+            userid="john@pve",
+            password="secret",
+            email="john@example.com",
+            confirm=True,
         )
 
     assert result["status"] == "success"
@@ -418,10 +421,11 @@ async def test_set_user_permission(mock_client):
 
     mock_client.api_call.return_value = None
     mock_client.is_dry_run = False
+    mock_client.api_call = AsyncMock(return_value=[{"roleid": "PVEVMUser"}])
 
     with patch("proxmox_mcp.tools.cluster.get_client", return_value=mock_client):
         result = await set_user_permission(
-            path="/vms/100", roles="PVEVMUser", users="john@pve"
+            path="/vms/100", roles="PVEVMUser", users="john@pve", confirm=True
         )
 
     assert result["status"] == "success"
@@ -537,3 +541,78 @@ async def test_delete_ha_resource_confirmed(mock_client):
 
     assert result["status"] == "success"
     assert result["sid"] == "vm:100"
+
+
+# ---------------------------------------------------------------------------
+# Regression tests (phase 3)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_create_user_requires_confirm(mock_client):
+    from proxmox_mcp.tools.cluster import create_user
+
+    mock_client.api_call = AsyncMock(return_value=None)
+    with patch("proxmox_mcp.tools.cluster.get_client", return_value=mock_client):
+        result = await create_user(userid="john@pve", password="secret")
+    assert result["status"] == "confirmation_required"
+    mock_client.api_call.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_get_cluster_log_clamps_max_entries(mock_client):
+    from proxmox_mcp.tools.cluster import get_cluster_log
+
+    mock_client.api_call = AsyncMock(return_value=[])
+    with patch("proxmox_mcp.tools.cluster.get_client", return_value=mock_client):
+        await get_cluster_log(max_entries=5000)
+    assert mock_client.api_call.call_args.kwargs.get("max") == 1000
+
+
+@pytest.mark.asyncio
+async def test_set_user_permission_requires_confirm(mock_client):
+    from proxmox_mcp.tools.cluster import set_user_permission
+
+    mock_client.api_call = AsyncMock(return_value=[{"roleid": "PVEVMUser"}])
+    with patch("proxmox_mcp.tools.cluster.get_client", return_value=mock_client):
+        result = await set_user_permission(path="/", roles="PVEVMUser", users="john@pve")
+    assert result["status"] == "confirmation_required"
+
+
+@pytest.mark.asyncio
+async def test_set_user_permission_unknown_role(mock_client):
+    from proxmox_mcp.tools.cluster import set_user_permission
+
+    mock_client.api_call = AsyncMock(return_value=[{"roleid": "PVEVMUser"}])
+    with patch("proxmox_mcp.tools.cluster.get_client", return_value=mock_client):
+        result = await set_user_permission(
+            path="/", roles="NoSuchRole", users="john@pve", confirm=True
+        )
+    assert result["status"] == "error"
+    assert "NoSuchRole" in result["message"]
+
+
+@pytest.mark.asyncio
+async def test_set_user_permission_bad_role_chars(mock_client):
+    from proxmox_mcp.tools.cluster import set_user_permission
+
+    mock_client.api_call = AsyncMock(return_value=[])
+    with patch("proxmox_mcp.tools.cluster.get_client", return_value=mock_client):
+        result = await set_user_permission(
+            path="/", roles="Evil;rm", users="john@pve", confirm=True
+        )
+    assert result["status"] == "error"
+    assert result["error_type"] == "InvalidParameterError"
+
+
+@pytest.mark.asyncio
+async def test_set_user_permission_bad_path(mock_client):
+    from proxmox_mcp.tools.cluster import set_user_permission
+
+    mock_client.api_call = AsyncMock(return_value=[{"roleid": "PVEVMUser"}])
+    with patch("proxmox_mcp.tools.cluster.get_client", return_value=mock_client):
+        result = await set_user_permission(
+            path="/../../etc", roles="PVEVMUser", users="john@pve", confirm=True
+        )
+    assert result["status"] == "error"
+    assert result["error_type"] == "InvalidParameterError"

@@ -96,9 +96,7 @@ async def test_create_pci_mapping_confirmed(mock_client):
     from proxmox_mcp.tools.pci import create_pci_mapping
 
     mock_client.api_call = AsyncMock(side_effect=[[SAMPLE_DEVICE], None])
-    result = await create_pci_mapping(
-        mapping_id="gpu0", node="pve1", path="01:00.0", confirm=True
-    )
+    result = await create_pci_mapping(mapping_id="gpu0", node="pve1", path="01:00.0", confirm=True)
 
     assert result["status"] == "success"
     assert result["mapping_id"] == "gpu0"
@@ -113,9 +111,7 @@ async def test_create_pci_mapping_device_not_found(mock_client):
     from proxmox_mcp.tools.pci import create_pci_mapping
 
     mock_client.api_call = AsyncMock(return_value=[])
-    result = await create_pci_mapping(
-        mapping_id="gpu0", node="pve1", path="01:00.0", confirm=True
-    )
+    result = await create_pci_mapping(mapping_id="gpu0", node="pve1", path="01:00.0", confirm=True)
 
     assert result["status"] == "error"
 
@@ -126,9 +122,7 @@ async def test_create_pci_mapping_dry_run(mock_client):
 
     mock_client.is_dry_run = True
     mock_client.dry_run_response.return_value = {"status": "dry_run"}
-    result = await create_pci_mapping(
-        mapping_id="gpu0", node="pve1", path="01:00.0", confirm=True
-    )
+    result = await create_pci_mapping(mapping_id="gpu0", node="pve1", path="01:00.0", confirm=True)
     assert result["status"] == "dry_run"
 
 
@@ -136,9 +130,7 @@ async def test_create_pci_mapping_dry_run(mock_client):
 async def test_create_pci_mapping_invalid_id(mock_client):
     from proxmox_mcp.tools.pci import create_pci_mapping
 
-    result = await create_pci_mapping(
-        mapping_id="0bad", node="pve1", path="01:00.0", confirm=True
-    )
+    result = await create_pci_mapping(mapping_id="0bad", node="pve1", path="01:00.0", confirm=True)
     assert result["status"] == "error"
 
 

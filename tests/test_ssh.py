@@ -66,7 +66,8 @@ class TestSSHExecutor:
         assert result.stdout == "output data"
         assert result.stderr == ""
         mock_client.connect.assert_called_once()
-        mock_client.close.assert_called_once()
+        # Client is cached for reuse, not closed after a successful command.
+        assert ("192.168.1.100", 22, "root", None) in executor._client_cache
 
     @patch("proxmox_mcp.ssh.paramiko.SSHClient")
     def test_execute_sync_failure(self, mock_ssh_class, mock_config):

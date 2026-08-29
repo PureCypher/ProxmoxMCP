@@ -225,10 +225,53 @@ async def test_get_node_syslog_with_since(mock_client):
     ]
 
     with patch("proxmox_mcp.tools.node.get_client", return_value=mock_client):
-        result = await get_node_syslog("pve1", limit=10, since="2024-01-02")
+        result = await get_node_syslog("pve1", limit=10, since="1704067200")
 
     assert result["status"] == "success"
     assert result["count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_get_node_syslog_since_int(mock_client):
+    from proxmox_mcp.tools.node import get_node_syslog
+
+    mock_client.api_call.return_value = []
+
+    with patch("proxmox_mcp.tools.node.get_client", return_value=mock_client):
+        result = await get_node_syslog("pve1", limit=10, since=1704067200)
+
+    assert result["status"] == "success"
+    mock_client.api_call.assert_called_once_with(
+        mock_client.api.nodes("pve1").syslog.get, limit=10, since=1704067200
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_node_syslog_since_date_string_rejected(mock_client):
+    from proxmox_mcp.tools.node import get_node_syslog
+
+    with patch("proxmox_mcp.tools.node.get_client", return_value=mock_client):
+        result = await get_node_syslog("pve1", limit=10, since="2024-01-02")
+
+    assert result["status"] == "error"
+    assert result["error_type"] == "InvalidParameterError"
+    assert "unix epoch" in result["message"]
+    mock_client.api_call.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_get_node_syslog_limit_clamped(mock_client):
+    from proxmox_mcp.tools.node import get_node_syslog
+
+    mock_client.api_call.return_value = []
+
+    with patch("proxmox_mcp.tools.node.get_client", return_value=mock_client):
+        result = await get_node_syslog("pve1", limit=999999)
+
+    assert result["status"] == "success"
+    mock_client.api_call.assert_called_once_with(
+        mock_client.api.nodes("pve1").syslog.get, limit=10000
+    )
 
 
 # --- reboot_node ---

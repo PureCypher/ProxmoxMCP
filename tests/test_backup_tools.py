@@ -95,11 +95,9 @@ async def test_create_backup_job(mock_client):
     from proxmox_mcp.tools.backup import create_backup_job
 
     mock_client.api_call = AsyncMock(return_value=None)
-    result = await create_backup_job(
-        storage="local", schedule="0 2 * * *", vmid="100,101"
-    )
+    result = await create_backup_job(storage="local", schedule="daily", vmid="100,101")
     assert result["status"] == "success"
-    assert result["schedule"] == "0 2 * * *"
+    assert result["schedule"] == "daily"
 
 
 @pytest.mark.asyncio
@@ -108,7 +106,7 @@ async def test_create_backup_job_dry_run(mock_client):
 
     mock_client.is_dry_run = True
     mock_client.dry_run_response.return_value = {"status": "dry_run"}
-    result = await create_backup_job(storage="local", schedule="0 3 * * *")
+    result = await create_backup_job(storage="local", schedule="at 03:00")
     assert result["status"] == "dry_run"
 
 
@@ -131,3 +129,42 @@ async def test_delete_backup_job_confirmed(mock_client):
     result = await delete_backup_job(job_id="backup-001", confirm=True)
     assert result["status"] == "success"
     assert result["job_id"] == "backup-001"
+
+
+# ---------------------------------------------------------------------------
+# Regression tests (phase 3)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_create_backup_job_invalid_cron_schedule(mock_client):
+    from proxmox_mcp.tools.backup import create_backup_job
+
+    mock_client.api_call = AsyncMock(return_value=None)
+    result = await create_backup_job(storage="local", schedule="0 2 * * *")
+    assert result["status"] == "error"
+    assert result["error_type"] == "InvalidParameterError"
+    mock_client.api_call.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_create_backup_job_valid_schedules(mock_client):
+    from proxmox_mcp.tools.backup import create_backup_job
+
+    mock_client.api_call = AsyncMock(return_value=None)
+    for sched in ("daily", "weekly", "monthly", "hourly", "at 02:00"):
+        mock_client.api_call.reset_mock()
+        result = await create_backup_job(storage="local", schedule=sched)
+        assert result["status"] == "success", sched
+
+
+@pytest.mark.asyncio
+async def test_create_backup_job_bad_at_time(mock_client):
+    from proxmox_mcp.tools.backup import create_backup_job
+
+    mock_client.api_call = AsyncMock(return_value=None)
+    for bad in ("at 24:00", "at 00:60", "at 2:5", "atnoon"):
+        mock_client.api_call.reset_mock()
+        result = await create_backup_job(storage="local", schedule=bad)
+        assert result["status"] == "error", bad
+    assert mock_client.api_call.call_count == 0

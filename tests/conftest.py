@@ -4,8 +4,16 @@ Patches the server module to avoid needing real Proxmox config/connection
 when importing tool modules.
 """
 
+import os
 import sys
 from unittest.mock import MagicMock
+
+# Dummy defaults so a bare `pytest` on a fresh clone can import proxmox_mcp
+# (whose config requires PROXMOX_HOST + an auth pair). setdefault: real env
+# values (or .env files) always win; nothing here is a secret.
+os.environ.setdefault("PROXMOX_HOST", "test")
+os.environ.setdefault("PROXMOX_TOKEN_NAME", "root@pam!dummy")
+os.environ.setdefault("PROXMOX_TOKEN_VALUE", "00000000-0000-0000-0000-000000000000")
 
 import pytest
 

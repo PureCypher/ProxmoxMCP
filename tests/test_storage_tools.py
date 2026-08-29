@@ -307,3 +307,89 @@ async def test_download_to_storage_dry_run(mock_client):
         )
 
     assert result["status"] == "dry_run"
+
+
+# ---------------------------------------------------------------------------
+# Regression tests (phase 3)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_download_to_storage_rejects_bad_scheme(mock_client):
+    from proxmox_mcp.tools.storage import download_to_storage
+
+    with patch("proxmox_mcp.tools.storage.get_client", return_value=mock_client):
+        result = await download_to_storage(
+            node="pve1",
+            storage="local",
+            url="ftp://example.com/x.iso",
+            content="iso",
+            filename="x.iso",
+        )
+    assert result["status"] == "error"
+    assert result["error_type"] == "InvalidParameterError"
+    mock_client.api_call.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_download_to_storage_rejects_loopback(mock_client):
+    from proxmox_mcp.tools.storage import download_to_storage
+
+    with patch("proxmox_mcp.tools.storage.get_client", return_value=mock_client):
+        result = await download_to_storage(
+            node="pve1",
+            storage="local",
+            url="http://127.0.0.1/x.iso",
+            content="iso",
+            filename="x.iso",
+        )
+    assert result["status"] == "error"
+    result = await download_to_storage(
+        node="pve1",
+        storage="local",
+        url="http://169.254.169.254/latest/meta-data",
+        content="iso",
+        filename="x.iso",
+    )
+    assert result["status"] == "error"
+    result = await download_to_storage(
+        node="pve1",
+        storage="local",
+        url="http://[::1]/x.iso",
+        content="iso",
+        filename="x.iso",
+    )
+    assert result["status"] == "error"
+
+
+@pytest.mark.asyncio
+async def test_download_to_storage_rejects_local_domain(mock_client):
+    from proxmox_mcp.tools.storage import download_to_storage
+
+    with patch("proxmox_mcp.tools.storage.get_client", return_value=mock_client):
+        result = await download_to_storage(
+            node="pve1",
+            storage="local",
+            url="http://intranet.local/x.iso",
+            content="iso",
+            filename="x.iso",
+        )
+    assert result["status"] == "error"
+    assert result["error_type"] == "InvalidParameterError"
+
+
+@pytest.mark.asyncio
+async def test_download_to_storage_accepts_https(mock_client):
+    from proxmox_mcp.tools.storage import download_to_storage
+
+    mock_client.is_dry_run = False
+    with patch("proxmox_mcp.tools.storage.get_client", return_value=mock_client):
+        mock_client.api_call = AsyncMock(return_value="UPID:x")
+        result = await download_to_storage(
+            node="pve1",
+            storage="local",
+            url="https://example.com/x.iso",
+            content="iso",
+            filename="x.iso",
+        )
+    assert result["status"] == "submitted"

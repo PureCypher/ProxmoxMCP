@@ -41,7 +41,19 @@ def test_format_error_response():
     assert result["suggestion"] == "Use list_vms to see available VMs."
 
 
-def test_format_error_response_no_suggestion():
+def test_format_error_response_default_suggestion():
     result = format_error_response(ProxmoxConnectionError("timeout"))
+    assert result["status"] == "error"
+    assert "PROXMOX_HOST" in result["suggestion"]
+
+
+def test_format_error_response_auth_default_suggestion():
+    result = format_error_response(AuthenticationError("bad token"))
+    assert "PROXMOX_TOKEN_NAME" in result["suggestion"]
+
+
+def test_format_error_response_no_default():
+    """Exceptions without a default_suggestion still get no suggestion key."""
+    result = format_error_response(VMNotFoundError("VM 999 not found"))
     assert result["status"] == "error"
     assert "suggestion" not in result
