@@ -19,6 +19,21 @@ import pytest
 
 
 @pytest.fixture(autouse=True, scope="session")
+def no_dotenv():
+    """Make config loading hermetic: no ambient .env may leak credentials into
+    tests (CI has none; a developer's live .env must not change results)."""
+    from proxmox_mcp.config import ProxmoxConfig
+
+    old = ProxmoxConfig.model_config.get("env_file")
+    ProxmoxConfig.model_config["env_file"] = "/nonexistent/.env.unset"
+    yield
+    if old is None:
+        ProxmoxConfig.model_config.pop("env_file", None)
+    else:
+        ProxmoxConfig.model_config["env_file"] = old
+
+
+@pytest.fixture(autouse=True, scope="session")
 def mock_server_module():
     """Inject a mock server module so tool modules can import mcp and proxmox_client
     without requiring real config or a Proxmox connection."""

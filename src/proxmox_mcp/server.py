@@ -20,6 +20,18 @@ logging.basicConfig(
 )
 logger = logging.getLogger("proxmox-mcp")
 
+# When invoked as `python -m proxmox_mcp.server`, this module is loaded under
+# the name `__main__`. The tool modules do `from proxmox_mcp.server import mcp`;
+# without this alias Python would re-import a second, empty `proxmox_mcp.server`
+# and register every tool on a different `mcp`, so the running server would
+# expose zero tools. Aliasing makes all three entry points (console script,
+# `python -m proxmox_mcp`, and `python -m proxmox_mcp.server`) resolve the same
+# `mcp` instance.
+if __name__ == "__main__":
+    import sys as _sys
+
+    _sys.modules.setdefault("proxmox_mcp.server", _sys.modules[__name__])
+
 # Create MCP server
 mcp = FastMCP(
     "Proxmox VE Manager",
