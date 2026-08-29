@@ -454,6 +454,27 @@ async def migrate_vm(
         return format_error_response(e)
 
 
+# Valid PVE QEMU ostype values (subset); a bare "win" is rejected by the API.
+_VALID_OSTYPES = {
+    "wxp",
+    "w2k",
+    "w2k3",
+    "w2k8",
+    "wvista",
+    "win7",
+    "win8",
+    "win10",
+    "win11",
+    "l24",
+    "l26",
+    "l10",
+    "l11",
+    "solaris",
+    "nos",
+    "other",
+}
+
+
 @mcp.tool()
 async def create_vm(
     node: str,
@@ -463,7 +484,7 @@ async def create_vm(
     cores: int = 2,
     sockets: int = 1,
     iso: str | None = None,
-    disk_size: str = "32G",
+    disk_size: str = "32",
     storage: str = "local-lvm",
     net_bridge: str = "vmbr0",
     os_type: str = "l26",
@@ -479,12 +500,13 @@ async def create_vm(
         cores: CPU cores (default 2).
         sockets: CPU sockets (default 1).
         iso: ISO image path for CD-ROM (e.g. 'local:iso/ubuntu.iso').
-        disk_size: Root disk size (default '32G').
+        disk_size: Root disk size (default '32').
         storage: Storage pool for disks (default 'local-lvm').
         net_bridge: Network bridge (default 'vmbr0').
         os_type: OS type identifier. One of: 'l26' (default, Linux 2.6+),
-            'l20' (Linux 2.0-2.6), 'l10' (Linux 1.x), 'win' (Windows),
-            'solaris' (Solaris), 'nos' (no OS), or 'other'.
+            'l20' (Linux 2.0-2.6), 'l10' (Linux 1.x), 'win10', 'win11',
+            'win7', 'win8', 'w2k8', 'wxp', 'w2k', 'w2k3', 'wvista',
+            'solaris' (Solaris), 'nos' (no OS), or 'other'. (No bare 'win'.)
         start_after_create: Start the VM after creation (default False).
     """
     try:
@@ -493,6 +515,14 @@ async def create_vm(
         client.validate_node(node)
         if vmid is not None:
             validate_vmid(vmid)
+        if os_type not in _VALID_OSTYPES:
+            return {
+                "status": "error",
+                "message": (
+                    f"Unknown os_type {os_type!r}. Valid values: "
+                    f"{', '.join(sorted(_VALID_OSTYPES))}."
+                ),
+            }
         if client.is_dry_run:
             return client.dry_run_response("create_vm", node=node, name=name, vmid=vmid)
         kwargs: dict[str, Any] = {

@@ -442,3 +442,19 @@ async def test_list_vms_empty_not_silent(mock_client):
     assert result["status"] == "error"
     assert "bogus" not in result.get("message", "")
     assert "nonexistent" in result["message"]
+
+
+async def test_create_vm_rejects_invalid_os_type(mock_client):
+    from proxmox_mcp.tools.vm import create_vm
+
+    result = await create_vm(node="pve1", name="bad-vm", os_type="win")
+    assert result["status"] == "error"
+    assert "win" in result["message"]
+
+
+async def test_create_vm_accepts_win11(mock_client):
+    from proxmox_mcp.tools.vm import create_vm
+
+    mock_client.api_call = AsyncMock(return_value="UPID:pve1:00006:create")
+    result = await create_vm(node="pve1", name="win11-vm", os_type="win11")
+    assert result["status"] == "submitted"
