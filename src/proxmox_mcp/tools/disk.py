@@ -39,9 +39,9 @@ logger = logging.getLogger("proxmox-mcp")
 
 
 def get_client() -> "ProxmoxClient":
-    from proxmox_mcp.server import proxmox_client
+    from proxmox_mcp.server import get_server_client
 
-    return proxmox_client
+    return get_server_client()
 
 
 def get_mcp() -> "FastMCP":
@@ -51,9 +51,9 @@ def get_mcp() -> "FastMCP":
 
 
 def get_ssh() -> "SSHExecutor":
-    from proxmox_mcp.server import ssh_executor
+    from proxmox_mcp.server import get_ssh_executor
 
-    return ssh_executor
+    return get_ssh_executor()
 
 
 mcp = get_mcp()
@@ -100,28 +100,44 @@ async def _check_not_in_use(ssh, node: str, device: str) -> dict | None:
     if result.success and result.stdout.strip():
         raise DeviceInUseError(f"Device {device} has mounted partitions:\n{result.stdout.strip()}")
 
-    # Check LVM
+    # Check LVM, ZFS, and MD RAID in one SSH round-trip. grep -w is a whole-word
+    # match, so e.g. nvme0n1 does not match nvme0n10 or nvme0n11.
+    dev_name = device.split("/")[-1]
     result = await ssh.execute(
-        node, f"pvs --noheadings -o pv_name,vg_name 2>/dev/null | grep -E '{device}'"
+        node,
+        "echo '---LVM---'; "
+        f"pvs --noheadings -o pv_name,vg_name 2>/dev/null | grep -w '/dev/{dev_name}'; "
+        "echo '---ZFS---'; "
+        f"zpool status 2>/dev/null | grep -w '{dev_name}'; "
+        "echo '---MD---'; "
+        f"grep -w '{dev_name}' /proc/mdstat 2>/dev/null; "
+        "echo '---END---'",
     )
-    if result.success and result.stdout.strip():
-        raise DeviceInUseError(
-            f"Device {device} is an LVM physical volume:\n{result.stdout.strip()}"
-        )
+    sections: dict[str, list[str]] = {"lvm": [], "zfs": [], "md": []}
+    section = ""
+    for line in result.stdout.splitlines():
+        stripped = line.strip()
+        if stripped == "---LVM---":
+            section = "lvm"
+        elif stripped == "---ZFS---":
+            section = "zfs"
+        elif stripped == "---MD---":
+            section = "md"
+        elif stripped.startswith("---"):
+            section = ""
+        elif section:
+            sections[section].append(stripped)
 
-    # Check ZFS
-    result = await ssh.execute(
-        node, "zpool status 2>/dev/null | grep -E '" + device.split("/")[-1] + "'"
-    )
-    if result.success and result.stdout.strip():
-        raise DeviceInUseError(f"Device {device} is part of a ZFS pool:\n{result.stdout.strip()}")
+    lvm = "\n".join(sections["lvm"])
+    zfs = "\n".join(sections["zfs"])
+    md = "\n".join(sections["md"])
 
-    # Check MD RAID
-    result = await ssh.execute(node, f"grep '{device.split('/')[-1]}' /proc/mdstat 2>/dev/null")
-    if result.success and result.stdout.strip():
-        raise DeviceInUseError(
-            f"Device {device} is part of an MD RAID array:\n{result.stdout.strip()}"
-        )
+    if lvm:
+        raise DeviceInUseError(f"Device {device} is an LVM physical volume:\n{lvm}")
+    if zfs:
+        raise DeviceInUseError(f"Device {device} is part of a ZFS pool:\n{zfs}")
+    if md:
+        raise DeviceInUseError(f"Device {device} is part of an MD RAID array:\n{md}")
 
     return None
 
@@ -157,27 +173,27 @@ async def list_physical_disks(
         # Primary: Proxmox API for disk list
         api_disks = await client.api_call(client.api.nodes(node).disks.list.get)
 
-        # Enrich with SSH lsblk for partition-level detail
+        # Enrich with SSH: lsblk partition detail + LVM PV list in one probe
         lsblk_data = {}
+        lvm_pvs: set[str] = set()
         if include_partitions:
             result = await ssh.execute(
                 node,
                 "lsblk -Jb -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT,UUID,MODEL,SERIAL,"
-                "ROTA,TRAN,PTTYPE,PKNAME",
+                "ROTA,TRAN,PTTYPE,PKNAME; "
+                "echo '---LVM---'; pvs --noheadings -o pv_name 2>/dev/null",
             )
             if result.success:
+                raw = result.stdout
+                if "---LVM---" in raw:
+                    raw, _, pv_raw = raw.partition("---LVM---")
+                    lvm_pvs = {line.strip() for line in pv_raw.splitlines() if line.strip()}
                 try:
-                    parsed = json.loads(result.stdout)
+                    parsed = json.loads(raw)
                     for dev in parsed.get("blockdevices", []):
                         lsblk_data[f"/dev/{dev['name']}"] = dev
-                except (json.JSONDecodeError, KeyError):
+                except json.JSONDecodeError:
                     logger.warning("Failed to parse lsblk JSON output")
-
-        # Check LVM PVs for usage detection
-        lvm_pvs = set()
-        pv_result = await ssh.execute(node, "pvs --noheadings -o pv_name 2>/dev/null")
-        if pv_result.success:
-            lvm_pvs = {line.strip() for line in pv_result.stdout.splitlines() if line.strip()}
 
         disks = []
         for api_disk in api_disks:
@@ -346,9 +362,7 @@ async def partition_disk(
                 node, f"echo ',,L;' | sfdisk --label dos {device}", timeout=30
             )
         if not result.success:
-            return format_error_response(
-                Exception(f"Partitioning failed: {result.stderr}")
-            )
+            return format_error_response(Exception(f"Partitioning failed: {result.stderr}"))
 
         # Step 3: Re-read partition table
         await ssh.execute(node, f"blockdev --rereadpt {device} && sleep 1", timeout=15)
@@ -629,9 +643,7 @@ async def create_mount_point(
             await ssh.execute(node, "cp /etc/fstab /etc/fstab.bak.$(date +%s)")
 
             # Add entry using printf for safety
-            result = await ssh.execute(
-                node, f"printf '%s\\n' '{fstab_line}' >> /etc/fstab"
-            )
+            result = await ssh.execute(node, f"printf '%s\\n' '{fstab_line}' >> /etc/fstab")
             if result.success:
                 # Validate fstab
                 validate = await ssh.execute(node, "mount -a --fake")

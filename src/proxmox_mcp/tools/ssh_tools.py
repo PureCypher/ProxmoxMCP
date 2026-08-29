@@ -16,6 +16,8 @@ from proxmox_mcp.utils.errors import (
 )
 from proxmox_mcp.utils.sanitizers import (
     check_shell_injection,
+    validate_ip_address,
+    validate_owner,
     validate_package_name,
     validate_remote_file_path,
     validate_script_interpreter,
@@ -32,11 +34,15 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("proxmox-mcp")
 
+# Base64 payload chunk size for remote temp-file writes (keeps each SSH
+# command well under ARG_MAX).
+_B64_CHUNK_SIZE = 8192
+
 
 def get_client() -> "ProxmoxClient":
-    from proxmox_mcp.server import proxmox_client
+    from proxmox_mcp.server import get_server_client
 
-    return proxmox_client
+    return get_server_client()
 
 
 def get_mcp() -> "FastMCP":
@@ -46,9 +52,9 @@ def get_mcp() -> "FastMCP":
 
 
 def get_ssh() -> "SSHExecutor":
-    from proxmox_mcp.server import ssh_executor
+    from proxmox_mcp.server import get_ssh_executor
 
-    return ssh_executor
+    return get_ssh_executor()
 
 
 mcp = get_mcp()
@@ -74,6 +80,7 @@ async def _resolve_vm_ip(client, vmid: int, node: str) -> str:
     interfaces = []
 
     # Try QEMU guest agent
+    qemu_error = None
     try:
         data = await client.api_call(
             client.api.nodes(node).qemu(vmid).agent("network-get-interfaces").get
@@ -81,19 +88,30 @@ async def _resolve_vm_ip(client, vmid: int, node: str) -> str:
         raw = data.get("result", data)
         if isinstance(raw, list):
             interfaces = raw
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("QEMU agent IP lookup failed for VMID %d: %s", vmid, e)
+        qemu_error = e
 
     # Try LXC interfaces
+    lxc_error = None
     if not interfaces:
         try:
-            data = await client.api_call(
-                client.api.nodes(node).lxc(vmid).interfaces.get
-            )
+            data = await client.api_call(client.api.nodes(node).lxc(vmid).interfaces.get)
             if isinstance(data, list):
                 interfaces = data
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("LXC interface IP lookup failed for VMID %d: %s", vmid, e)
+            lxc_error = e
+
+    # If both probes failed with non-not-found errors (e.g. 401, offline node),
+    # surface the failure instead of a misleading "Cannot discover IP".
+    if not interfaces and qemu_error is not None and lxc_error is not None:
+        qemu_404 = "404" in str(qemu_error)
+        lxc_404 = "404" in str(lxc_error)
+        if not (qemu_404 or lxc_404):
+            raise SSHExecutionError(
+                f"IP discovery failed: {str(qemu_error)[:120]}; {str(lxc_error)[:120]}"
+            )
 
     if not interfaces:
         raise SSHExecutionError(
@@ -170,7 +188,7 @@ async def _get_ssh_target(
     resolved_node = await client.resolve_node(vmid, node)
 
     if target_ip:
-        check_shell_injection(target_ip, "target_ip")
+        validate_ip_address(target_ip)
         return target_ip, resolved_node
 
     ip = await _resolve_vm_ip(client, vmid, resolved_node)
@@ -194,8 +212,45 @@ def _build_ssh_overrides(
         check_shell_injection(ssh_key_path, "ssh_key_path")
         overrides["key_path"] = ssh_key_path
     if ssh_port is not None:
+        if not isinstance(ssh_port, int) or not 1 <= ssh_port <= 65535:
+            raise InvalidParameterError(
+                f"ssh_port {ssh_port!r} is invalid. Must be between 1 and 65535."
+            )
         overrides["port"] = ssh_port
     return overrides
+
+
+def _ssh_response(vmid: int, node: str, ip: str, result, extra: dict | None = None) -> dict:
+    """Build the standard success/error response dict for SSH tools."""
+    base = {
+        "status": "success" if result.success else "error",
+        "vmid": vmid,
+        "node": node,
+        "target_ip": ip,
+        "exit_code": result.exit_code,
+    }
+    if extra:
+        base.update(extra)
+    if result.success:
+        base["output"] = result.stdout[-1000:] if result.stdout else ""
+    else:
+        base["error"] = result.stderr[-500:] if result.stderr else "Unknown error"
+    return base
+
+
+def _chunked_payload_commands(encoded: str) -> list[str]:
+    """Build SSH commands that append base64 payload chunks to a remote temp file.
+
+    Keeps each command well under ARG_MAX for large payloads.
+    """
+    first: list[str] = ["TMPF=$(mktemp)"]
+    for i in range(0, max(len(encoded), 1), _B64_CHUNK_SIZE):
+        chunk = encoded[i : i + _B64_CHUNK_SIZE]
+        if i == 0:
+            first.append(f"printf '%s' '{chunk}' > \"$TMPF\"")
+        else:
+            first.append(f"printf '%s' '{chunk}' >> \"$TMPF\"")
+    return first
 
 
 # ---------------------------------------------------------------------------
@@ -204,24 +259,24 @@ def _build_ssh_overrides(
 
 
 async def _detect_package_manager(ssh, host: str, **ssh_kwargs) -> str:
-    """Detect the package manager on a remote host.
+    """Detect the package manager on a remote host with a single SSH probe.
 
     Returns one of: apt, dnf, yum, apk, zypper, pacman.
     """
-    managers = [
-        ("apt-get", "apt"),
-        ("dnf", "dnf"),
-        ("yum", "yum"),
-        ("apk", "apk"),
-        ("zypper", "zypper"),
-        ("pacman", "pacman"),
-    ]
-    for binary, name in managers:
-        result = await ssh.execute_on_host(
-            host, f"command -v {binary} >/dev/null 2>&1 && echo found", timeout=10, **ssh_kwargs
-        )
-        if result.success and "found" in result.stdout:
-            return name
+    # One combined probe: command -v prints paths of the binaries it finds,
+    # so only the first (highest-priority) result matters.
+    result = await ssh.execute_on_host(
+        host,
+        "command -v apt-get dnf yum apk zypper pacman 2>/dev/null | head -n1",
+        timeout=15,
+        **ssh_kwargs,
+    )
+    if result.success:
+        binary: str = result.stdout.strip().split("/")[-1]
+        if binary == "apt-get":
+            return "apt"
+        if binary in ("dnf", "yum", "apk", "zypper", "pacman"):
+            return binary
 
     raise SSHExecutionError("No supported package manager found on target system.")
 
@@ -231,8 +286,7 @@ def _build_install_command(manager: str, packages: list[str]) -> str:
     pkg_str = " ".join(packages)
     commands = {
         "apt": (
-            f"DEBIAN_FRONTEND=noninteractive apt-get update -qq && "
-            f"apt-get install -y -qq {pkg_str}"
+            f"DEBIAN_FRONTEND=noninteractive apt-get update -qq && apt-get install -y -qq {pkg_str}"
         ),
         "dnf": f"dnf install -y {pkg_str}",
         "yum": f"yum install -y {pkg_str}",
@@ -298,15 +352,24 @@ async def install_package(
         for pkg in packages:
             validate_package_name(pkg)
 
+        client = get_client()
+        if client.is_dry_run:
+            return client.dry_run_response(
+                "install_package",
+                vmid=vmid,
+                packages=packages,
+                action=action,
+                node=node,
+                target_ip=target_ip,
+            )
+
         ip, resolved_node = await _get_ssh_target(vmid, node, target_ip)
         ssh_kwargs = _build_ssh_overrides(ssh_user, ssh_password, ssh_key_path, ssh_port)
         ssh = get_ssh()
 
         # Detect package manager
         manager = await _detect_package_manager(ssh, ip, **ssh_kwargs)
-        logger.info(
-            "Detected package manager '%s' on VMID %d (%s)", manager, vmid, ip
-        )
+        logger.info("Detected package manager '%s' on VMID %d (%s)", manager, vmid, ip)
 
         # Build and execute command
         if action == "install":
@@ -316,29 +379,22 @@ async def install_package(
 
         result = await ssh.execute_on_host(ip, command, timeout=120, **ssh_kwargs)
 
-        if not result.success:
-            return {
-                "status": "error",
-                "vmid": vmid,
-                "node": resolved_node,
-                "target_ip": ip,
+        response = _ssh_response(
+            vmid,
+            resolved_node,
+            ip,
+            result,
+            {
                 "action": action,
                 "packages": packages,
                 "package_manager": manager,
-                "exit_code": result.exit_code,
-                "error": result.stderr[-500:] if result.stderr else "Unknown error",
-            }
-
-        return {
-            "status": "success",
-            "vmid": vmid,
-            "node": resolved_node,
-            "target_ip": ip,
-            "action": action,
-            "packages": packages,
-            "package_manager": manager,
-            "output": result.stdout[-1000:] if result.stdout else "",
-        }
+            },
+        )
+        # Success output is truncated by the helper; drop exit_code on success
+        # to match the previous response shape.
+        if result.success:
+            response.pop("exit_code", None)
+        return response
     except Exception as e:
         logger.error("Failed to %s packages on VMID %d: %s", action, vmid, e)
         return format_error_response(e)
@@ -378,6 +434,17 @@ async def manage_service(
         validate_service_name(service)
         validate_service_action(action)
 
+        client = get_client()
+        if client.is_dry_run:
+            return client.dry_run_response(
+                "manage_service",
+                vmid=vmid,
+                service=service,
+                action=action,
+                node=node,
+                target_ip=target_ip,
+            )
+
         ip, resolved_node = await _get_ssh_target(vmid, node, target_ip)
         ssh_kwargs = _build_ssh_overrides(ssh_user, ssh_password, ssh_key_path, ssh_port)
         ssh = get_ssh()
@@ -399,6 +466,17 @@ async def manage_service(
             is_active = lines[0].strip() if len(lines) > 0 else "unknown"
             is_enabled = lines[1].strip() if len(lines) > 1 else "unknown"
             full_status = "\n".join(lines[2:]) if len(lines) > 2 else ""
+            if not result.success:
+                return {
+                    "status": "error",
+                    "vmid": vmid,
+                    "node": resolved_node,
+                    "target_ip": ip,
+                    "service": service,
+                    "action": action,
+                    "exit_code": result.exit_code,
+                    "error": result.stderr[-500:] if result.stderr else "Unknown error",
+                }
             return {
                 "status": "success",
                 "vmid": vmid,
@@ -410,27 +488,14 @@ async def manage_service(
                 "details": full_status[-1000:],
             }
 
-        if not result.success:
-            return {
-                "status": "error",
-                "vmid": vmid,
-                "node": resolved_node,
-                "target_ip": ip,
-                "service": service,
-                "action": action,
-                "exit_code": result.exit_code,
-                "error": result.stderr[-500:] if result.stderr else "Unknown error",
-            }
-
-        return {
-            "status": "success",
-            "vmid": vmid,
-            "node": resolved_node,
-            "target_ip": ip,
-            "service": service,
-            "action": action,
-            "output": result.stdout[-500:] if result.stdout else "",
-        }
+        response = _ssh_response(
+            vmid, resolved_node, ip, result, {"service": service, "action": action}
+        )
+        if result.success:
+            response.pop("exit_code", None)
+            # Keep the shorter output window from the previous shape.
+            response["output"] = (result.stdout or "")[-500:]
+        return response
     except Exception as e:
         logger.error("Failed to %s service '%s' on VMID %d: %s", action, service, vmid, e)
         return format_error_response(e)
@@ -483,7 +548,19 @@ async def transfer_file(
             )
 
         if owner:
-            check_shell_injection(owner, "owner")
+            validate_owner(owner)
+
+        client = get_client()
+        if client.is_dry_run:
+            return client.dry_run_response(
+                "transfer_file",
+                vmid=vmid,
+                destination=destination,
+                permissions=permissions,
+                owner=owner,
+                node=node,
+                target_ip=target_ip,
+            )
 
         ip, resolved_node = await _get_ssh_target(vmid, node, target_ip)
         ssh_kwargs = _build_ssh_overrides(ssh_user, ssh_password, ssh_key_path, ssh_port)
@@ -492,18 +569,18 @@ async def transfer_file(
         # Base64 encode content for safe transfer
         encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
 
-        # Ensure parent directory exists, write file, set permissions
+        # Ensure parent directory exists, then write the file in chunks to
+        # avoid ARG_MAX blowout, then set permissions.
         parent_dir = "/".join(destination.rsplit("/", 1)[:-1]) or "/"
-        commands = [
-            f"mkdir -p {parent_dir}",
-            f"echo '{encoded}' | base64 -d > {destination}",
-            f"chmod {permissions} {destination}",
-        ]
+        write_cmds = _chunked_payload_commands(encoded)
+        commands = [f"mkdir -p {parent_dir}", *write_cmds]
         if owner:
-            commands.append(f"chown {owner} {destination}")
+            commands.append(f'chown {owner} "$TMPF"')
+        commands.append(f'mv "$TMPF" {destination}')
+        commands.append(f"chmod {permissions} {destination}")
 
         command = " && ".join(commands)
-        result = await ssh.execute_on_host(ip, command, timeout=30, **ssh_kwargs)
+        result = await ssh.execute_on_host(ip, command, timeout=120, **ssh_kwargs)
 
         if not result.success:
             return {
@@ -555,11 +632,15 @@ async def execute_script(
     ssh_password: str | None = None,
     ssh_key_path: str | None = None,
     ssh_port: int | None = None,
+    confirm: bool = False,
 ) -> dict:
     """Upload and execute a script on a VM or container via SSH.
 
-    The script content is base64-encoded, transferred, executed with the
-    specified interpreter, and then cleaned up.
+    EXECUTES ARBITRARY COMMANDS on the target system with the target's shell
+    privileges. Pass confirm=True to actually run the script.
+
+    The script content is base64-encoded, written to a remote temp file,
+    executed with the specified interpreter, and then cleaned up.
 
     Args:
         vmid: The VM/CT ID to connect to.
@@ -572,6 +653,8 @@ async def execute_script(
         ssh_password: SSH password override (defaults to global config).
         ssh_key_path: SSH private key path override (defaults to global config).
         ssh_port: SSH port override (defaults to global config).
+        confirm: MUST be True to execute. Defaults to False, which returns a
+            confirmation_required response instead of running the script.
     """
     try:
         if not script.strip():
@@ -580,13 +663,40 @@ async def execute_script(
         validate_script_interpreter(interpreter)
         timeout = min(max(timeout, 5), 120)
 
+        client = get_client()
+        if not confirm and not client.is_dry_run:
+            return {
+                "status": "confirmation_required",
+                "warning": (
+                    "This will EXECUTE ARBITRARY COMMANDS on VM/CT "
+                    f"{vmid} via SSH with the target's shell privileges. "
+                    "The script runs with no sandbox or restriction."
+                ),
+                "action": "Call execute_script again with confirm=True to proceed.",
+                "vmid": vmid,
+                "interpreter": interpreter,
+                "script_length": len(script),
+            }
+
+        if client.is_dry_run:
+            return client.dry_run_response(
+                "execute_script",
+                vmid=vmid,
+                interpreter=interpreter,
+                script_length=len(script),
+                node=node,
+                target_ip=target_ip,
+            )
+
         ip, resolved_node = await _get_ssh_target(vmid, node, target_ip)
         ssh_kwargs = _build_ssh_overrides(ssh_user, ssh_password, ssh_key_path, ssh_port)
         ssh = get_ssh()
 
-        # Base64 encode and transfer via pipe to interpreter
+        # Base64 encode, write in chunks to a remote temp file (avoids ARG_MAX
+        # blowout), then run the interpreter on the decoded file.
         encoded = base64.b64encode(script.encode("utf-8")).decode("ascii")
-        command = f"echo '{encoded}' | base64 -d | {interpreter}"
+        write_cmds = _chunked_payload_commands(encoded)
+        command = " && ".join([*write_cmds, f'base64 -d "$TMPF" | {interpreter}; rm -f "$TMPF"'])
 
         result = await ssh.execute_on_host(ip, command, timeout=timeout, **ssh_kwargs)
 
@@ -634,6 +744,15 @@ async def get_system_info(
         ssh_port: SSH port override (defaults to global config).
     """
     try:
+        client = get_client()
+        if client.is_dry_run:
+            return client.dry_run_response(
+                "get_system_info",
+                vmid=vmid,
+                node=node,
+                target_ip=target_ip,
+            )
+
         ip, resolved_node = await _get_ssh_target(vmid, node, target_ip)
         ssh_kwargs = _build_ssh_overrides(ssh_user, ssh_password, ssh_key_path, ssh_port)
         ssh = get_ssh()

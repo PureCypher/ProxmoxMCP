@@ -1,5 +1,6 @@
 """Input sanitization and validation for disk management tools."""
 
+import ipaddress
 import re
 
 from proxmox_mcp.utils.errors import InvalidParameterError
@@ -317,8 +318,7 @@ def validate_pci_path(path: str) -> None:
     check_shell_injection(path, "path")
     if not PCI_PATH_RE.match(path):
         raise InvalidParameterError(
-            f"PCI path '{path}' is invalid. "
-            f"Must be a bus address like '01:00.0' or '0000:01:00.0'."
+            f"PCI path '{path}' is invalid. Must be a bus address like '01:00.0' or '0000:01:00.0'."
         )
 
 
@@ -327,4 +327,31 @@ def validate_pci_slot(slot: int) -> None:
     if not 0 <= slot <= 15:
         raise InvalidParameterError(
             f"PCI slot {slot} is invalid. Must be between 0 and 15 (hostpci0-hostpci15)."
+        )
+
+
+OWNER_RE = re.compile(r"^[A-Za-z0-9._][\w.-]*(?::[A-Za-z0-9._][\w.-]*)?$")
+
+
+def validate_ip_address(value: str) -> None:
+    """Validate that a value is a literal IPv4 or IPv6 address.
+
+    Hostnames, URLs, and any non-literal form are rejected.
+    """
+    check_shell_injection(value, "target_ip")
+    try:
+        ipaddress.ip_address(value.strip())
+    except ValueError:
+        raise InvalidParameterError(
+            f"Parameter 'target_ip' must be a literal IPv4 or IPv6 address "
+            f"(e.g., '192.168.1.50'). Hostnames are not allowed: {value!r}"
+        ) from None
+
+
+def validate_owner(owner: str) -> None:
+    """Validate a file owner in 'user' or 'user:group' format."""
+    if not OWNER_RE.match(owner):
+        raise InvalidParameterError(
+            f"Owner '{owner}' is invalid. "
+            f"Must be 'user' or 'user:group' with [A-Za-z0-9_.-] characters."
         )
