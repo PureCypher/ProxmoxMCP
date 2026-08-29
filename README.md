@@ -66,7 +66,25 @@ python -m proxmox_mcp
 # (MCP_HTTP_AUTH_TOKEN is required for the HTTP transport)
 ```
 
-### 4. Connect to Claude Desktop
+### 4. Docker
+
+```bash
+docker build -t proxmox-mcp .
+
+# The image defaults to MCP_TRANSPORT=streamable-http, so an auth token is
+# mandatory (the container refuses to start without one):
+docker run -d --name proxmox-mcp \
+  -p 3001:3001 \
+  -e PROXMOX_HOST=192.168.1.100 \
+  -e PROXMOX_TOKEN_NAME=root@pam!mcp-token \
+  -e PROXMOX_TOKEN_VALUE=<token-value> \
+  -e MCP_HTTP_AUTH_TOKEN=<strong-random-secret> \
+  proxmox-mcp
+# then point the client at http://<host>:3001/mcp with an
+# "Authorization: Bearer <strong-random-secret>" header
+```
+
+### 5. Connect to Claude Desktop
 
 Add to your Claude Desktop config (`claude_desktop_config.json`):
 
