@@ -1,9 +1,10 @@
 """Storage management tools for Proxmox VE."""
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+from urllib.parse import urlsplit
 
-from proxmox_mcp.utils.errors import format_error_response
+from proxmox_mcp.utils.errors import InvalidParameterError, format_error_response
 from proxmox_mcp.utils.formatters import format_task_result
 from proxmox_mcp.utils.sanitizers import validate_storage_id
 from proxmox_mcp.utils.validators import validate_node_name
@@ -17,9 +18,9 @@ logger = logging.getLogger("proxmox-mcp")
 
 
 def get_client() -> "ProxmoxClient":
-    from proxmox_mcp.server import proxmox_client
+    from proxmox_mcp.server import get_server_client
 
-    return proxmox_client
+    return get_server_client()
 
 
 def get_mcp() -> "FastMCP":
@@ -94,10 +95,12 @@ async def list_storage_content(node: str, storage: str, content_type: str | None
         client.validate_node(node)
         logger.info(
             "Listing content for storage '%s' on node '%s' (content_type=%s)",
-            storage, node, content_type,
+            storage,
+            node,
+            content_type,
         )
 
-        kwargs = {}
+        kwargs: dict[str, Any] = {}
         if content_type:
             kwargs["content"] = content_type
 
@@ -251,7 +254,7 @@ async def add_storage(
         # Validate storage type
         if storage_type not in VALID_STORAGE_TYPES:
             return format_error_response(
-                Exception(
+                InvalidParameterError(
                     f"Invalid storage type '{storage_type}'. "
                     f"Valid types: {', '.join(sorted(VALID_STORAGE_TYPES))}"
                 )
@@ -262,7 +265,7 @@ async def add_storage(
         invalid_content = set(content_list) - VALID_CONTENT_TYPES
         if invalid_content:
             return format_error_response(
-                Exception(
+                InvalidParameterError(
                     f"Invalid content types: {', '.join(invalid_content)}. "
                     f"Valid types: {', '.join(sorted(VALID_CONTENT_TYPES))}"
                 )
@@ -273,12 +276,12 @@ async def add_storage(
         existing_ids = {s.get("storage") for s in existing}
         if storage_id in existing_ids:
             return format_error_response(
-                Exception(f"Storage ID '{storage_id}' already exists."),
+                InvalidParameterError(f"Storage ID '{storage_id}' already exists."),
                 suggestion="Choose a different storage ID or remove the existing one first.",
             )
 
         # Build API parameters
-        api_params: dict = {
+        api_params: dict[str, Any] = {
             "storage": storage_id,
             "type": storage_type,
             "content": ",".join(content_list),
@@ -294,7 +297,9 @@ async def add_storage(
         # Type-specific parameters
         if storage_type == "dir":
             if not path:
-                return format_error_response(Exception("'path' is required for type=dir."))
+                return format_error_response(
+                    InvalidParameterError("'path' is required for type=dir.")
+                )
             api_params["path"] = path
             if mkdir:
                 api_params["mkdir"] = 1
@@ -302,7 +307,7 @@ async def add_storage(
         elif storage_type in ("lvm", "lvmthin"):
             if not vgname:
                 return format_error_response(
-                    Exception("'vgname' is required for type=lvm/lvmthin.")
+                    InvalidParameterError("'vgname' is required for type=lvm/lvmthin.")
                 )
             api_params["vgname"] = vgname
             if storage_type == "lvmthin" and thinpool:
@@ -310,7 +315,9 @@ async def add_storage(
 
         elif storage_type == "zfspool":
             if not pool:
-                return format_error_response(Exception("'pool' is required for type=zfspool."))
+                return format_error_response(
+                    InvalidParameterError("'pool' is required for type=zfspool.")
+                )
             api_params["pool"] = pool
             if sparse:
                 api_params["sparse"] = 1
@@ -318,7 +325,7 @@ async def add_storage(
         elif storage_type == "nfs":
             if not server or not export:
                 return format_error_response(
-                    Exception("'server' and 'export' are required for type=nfs.")
+                    InvalidParameterError("'server' and 'export' are required for type=nfs.")
                 )
             api_params["server"] = server
             api_params["export"] = export
@@ -328,7 +335,7 @@ async def add_storage(
         elif storage_type == "cifs":
             if not server or not share:
                 return format_error_response(
-                    Exception("'server' and 'share' are required for type=cifs.")
+                    InvalidParameterError("'server' and 'share' are required for type=cifs.")
                 )
             api_params["server"] = server
             api_params["share"] = share
@@ -384,7 +391,7 @@ async def remove_storage(
         # Never remove default storage
         if storage_id in DEFAULT_STORAGE_IDS:
             return format_error_response(
-                Exception(
+                InvalidParameterError(
                     f"Cannot remove default storage '{storage_id}'. "
                     f"This is a Proxmox default and should not be removed."
                 )
@@ -436,10 +443,14 @@ async def download_to_storage(
 ) -> dict:
     """Download an ISO or container template from a URL to storage.
 
+    The URL is fetched by the Proxmox node (node-side), so for SSRF safety
+    only 'http' and 'https' URLs are accepted; loopback (127.0.0.0/8, ::1),
+    link-local (169.254.0.0/8), and '.local' hosts are rejected.
+
     Args:
         node: The node to download on.
         storage: Target storage (e.g. 'local').
-        url: URL to download from.
+        url: http:// or https:// URL to download from.
         content: Content type - 'iso' or 'vztmpl'.
         filename: Filename to save as (e.g. 'ubuntu-24.04.iso').
         verify_certificates: Verify SSL certificates (default True).
@@ -448,19 +459,47 @@ async def download_to_storage(
         validate_node_name(node)
         client = get_client()
         client.validate_node(node)
+        parsed = urlsplit(url)
+        if parsed.scheme not in ("http", "https"):
+            return format_error_response(
+                InvalidParameterError(f"URL must use http or https scheme, got '{parsed.scheme}'.")
+            )
+        host = (parsed.hostname or "").lower()
+        is_restricted_host = (
+            host.startswith("127.")
+            or host == "localhost"
+            or host == "::1"
+            or host.startswith("169.254.")
+        )
+        if is_restricted_host:
+            return format_error_response(
+                InvalidParameterError(
+                    f"URL host '{host}' is loopback/link-local and is not allowed "
+                    f"for node-side downloads."
+                )
+            )
+        if host.endswith(".local"):
+            return format_error_response(
+                InvalidParameterError(
+                    f"URL host '{host}' is a mDNS '.local' name and is not "
+                    f"allowed for node-side downloads."
+                )
+            )
         if content not in VALID_DOWNLOAD_CONTENT:
             return format_error_response(
-                Exception(
-                    f"Invalid content type '{content}'. "
-                    f"Must be 'iso' or 'vztmpl'."
+                InvalidParameterError(
+                    f"Invalid content type '{content}'. Must be 'iso' or 'vztmpl'."
                 )
             )
         if client.is_dry_run:
             return client.dry_run_response(
                 "download_to_storage",
-                node=node, storage=storage, url=url, filename=filename,
+                node=node,
+                storage=storage,
+                url=url,
+                filename=filename,
             )
-        kwargs = {
+        kwargs: dict[str, Any] = {
             "url": url,
             "content": content,
             "filename": filename,
@@ -469,7 +508,10 @@ async def download_to_storage(
             kwargs["verify-certificates"] = 0
         logger.info(
             "Downloading %s to '%s' on node '%s' from %s",
-            content, storage, node, url,
+            content,
+            storage,
+            node,
+            url,
         )
         upid = await client.api_call(
             client.api.nodes(node).storage(storage)("download-url").post,

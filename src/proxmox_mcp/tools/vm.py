@@ -2,9 +2,9 @@
 
 import json
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from proxmox_mcp.utils.errors import format_error_response
+from proxmox_mcp.utils.errors import InvalidParameterError, format_error_response
 from proxmox_mcp.utils.formatters import format_task_result, format_vm_summary
 from proxmox_mcp.utils.validators import validate_node_name, validate_vmid
 
@@ -15,44 +15,99 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("proxmox-mcp")
 
+DEFAULT_START_TIMEOUT = 60
+DEFAULT_SHUTDOWN_TIMEOUT = 120
+MAX_EXTRA_CONFIG_VALUE_LEN = 4096
+VALID_VM_STATUSES = frozenset({"running", "stopped", "paused", "suspended"})
+VALID_RRD_TIMEFRAMES = frozenset({"hour", "day", "week", "month", "year"})
+
 # Allowlist of VM config keys safe to modify via extra_config.
 # Keys NOT in this set are rejected to prevent dangerous operations
 # (e.g., hookscript for arbitrary code execution, hostpci for PCI passthrough).
-VM_SAFE_CONFIG_KEYS = frozenset({
-    # CPU & Memory
-    "cores", "sockets", "vcpus", "cpu", "cpulimit", "cpuunits",
-    "memory", "balloon", "shares", "numa",
-    # Boot & BIOS
-    "boot", "bootdisk", "bios", "machine", "ostype",
-    # Display
-    "vga", "tablet",
-    # Cloud-init
-    "ciuser", "cipassword", "citype", "cicustom",
-    "ipconfig0", "ipconfig1", "ipconfig2", "ipconfig3",
-    "nameserver", "searchdomain", "sshkeys",
-    # Description & Tags
-    "description", "tags", "name", "onboot", "startup", "protection",
-    # Agent
-    "agent",
-    # Hotplug
-    "hotplug",
-    # Disk
-    "ide0", "ide1", "ide2", "ide3",
-    "scsi0", "scsi1", "scsi2", "scsi3",
-    "virtio0", "virtio1", "virtio2", "virtio3",
-    "sata0", "sata1", "sata2", "sata3", "sata4", "sata5",
-    "efidisk0", "tpmstate0",
-    # Network
-    "net0", "net1", "net2", "net3",
-    # Misc safe
-    "kvm", "localtime", "freeze", "template",
-})
+VM_SAFE_CONFIG_KEYS = frozenset(
+    {
+        # CPU & Memory
+        "cores",
+        "sockets",
+        "vcpus",
+        "cpu",
+        "cpulimit",
+        "cpuunits",
+        "memory",
+        "balloon",
+        "shares",
+        "numa",
+        # Boot & BIOS
+        "boot",
+        "bootdisk",
+        "bios",
+        "machine",
+        "ostype",
+        # Display
+        "vga",
+        "tablet",
+        # Cloud-init
+        "ciuser",
+        "cipassword",
+        "citype",
+        "cicustom",
+        "ipconfig0",
+        "ipconfig1",
+        "ipconfig2",
+        "ipconfig3",
+        "nameserver",
+        "searchdomain",
+        "sshkeys",
+        # Description & Tags
+        "description",
+        "tags",
+        "name",
+        "onboot",
+        "startup",
+        "protection",
+        # Agent
+        "agent",
+        # Hotplug
+        "hotplug",
+        # Disk
+        "ide0",
+        "ide1",
+        "ide2",
+        "ide3",
+        "scsi0",
+        "scsi1",
+        "scsi2",
+        "scsi3",
+        "virtio0",
+        "virtio1",
+        "virtio2",
+        "virtio3",
+        "sata0",
+        "sata1",
+        "sata2",
+        "sata3",
+        "sata4",
+        "sata5",
+        "efidisk0",
+        "tpmstate0",
+        # Network
+        "net0",
+        "net1",
+        "net2",
+        "net3",
+        # Misc safe
+        "kvm",
+        "localtime",
+        "freeze",
+        "template",
+    }
+)
 
 
 def get_client() -> "ProxmoxClient":
-    from proxmox_mcp.server import proxmox_client
+    from proxmox_mcp.server import get_server_client
 
-    return proxmox_client
+    return get_server_client()
 
 
 def get_mcp() -> "FastMCP":
@@ -70,10 +125,18 @@ async def list_vms(node: str | None = None, status_filter: str | None = None) ->
 
     Args:
         node: Filter to a specific node. None for all nodes.
-        status_filter: Filter by status - 'running', 'stopped', or None for all.
+        status_filter: Filter by status - 'running', 'stopped', 'paused',
+            'suspended', or None for all.
     """
     try:
         client = get_client()
+        if status_filter is not None and status_filter not in VALID_VM_STATUSES:
+            return format_error_response(
+                InvalidParameterError(
+                    f"Invalid status_filter '{status_filter}'. "
+                    f"Must be one of: {', '.join(sorted(VALID_VM_STATUSES))} (or omit)."
+                )
+            )
         if node:
             validate_node_name(node)
             client.validate_node(node)
@@ -136,6 +199,13 @@ async def get_vm_rrd_data(vmid: int, node: str | None = None, timeframe: str = "
     """
     try:
         client = get_client()
+        if timeframe not in VALID_RRD_TIMEFRAMES:
+            return format_error_response(
+                InvalidParameterError(
+                    f"Invalid timeframe '{timeframe}'. "
+                    f"Must be one of: {', '.join(sorted(VALID_RRD_TIMEFRAMES))}."
+                )
+            )
         validate_vmid(vmid)
         node = await client.resolve_node(vmid, node)
         data = await client.api_call(
@@ -153,7 +223,9 @@ async def get_vm_rrd_data(vmid: int, node: str | None = None, timeframe: str = "
 
 
 @mcp.tool()
-async def start_vm(vmid: int, node: str | None = None, timeout: int = 60) -> dict:
+async def start_vm(
+    vmid: int, node: str | None = None, timeout: int = DEFAULT_START_TIMEOUT
+) -> dict:
     """Start a stopped QEMU VM.
 
     Args:
@@ -169,7 +241,9 @@ async def start_vm(vmid: int, node: str | None = None, timeout: int = 60) -> dic
         if client.is_dry_run:
             return client.dry_run_response("start_vm", vmid=vmid, node=node)
         logger.info("Starting VM %d on %s", vmid, node)
-        upid = await client.api_call(client.api.nodes(node).qemu(vmid).status.start.post)
+        upid = await client.api_call(
+            client.api.nodes(node).qemu(vmid).status.start.post, timeout=timeout
+        )
         return format_task_result({"data": upid})
     except Exception as e:
         return format_error_response(e)
@@ -198,13 +272,16 @@ async def stop_vm(vmid: int, node: str | None = None) -> dict:
 
 
 @mcp.tool()
-async def shutdown_vm(vmid: int, node: str | None = None, timeout: int = 120) -> dict:
+async def shutdown_vm(
+    vmid: int, node: str | None = None, timeout: int = DEFAULT_SHUTDOWN_TIMEOUT
+) -> dict:
     """Graceful ACPI shutdown of a QEMU VM.
 
     Args:
         vmid: The VM ID.
         node: The node name. Auto-detected if omitted.
-        timeout: Timeout in seconds for the shutdown (default 120).
+        timeout: Accepted for compatibility; the PVE API's default soft-off
+            timeout applies (the API endpoint takes no timeout parameter).
     """
     try:
         client = get_client()
@@ -214,9 +291,7 @@ async def shutdown_vm(vmid: int, node: str | None = None, timeout: int = 120) ->
         if client.is_dry_run:
             return client.dry_run_response("shutdown_vm", vmid=vmid, node=node)
         logger.info("Graceful shutdown of VM %d on %s", vmid, node)
-        upid = await client.api_call(
-            client.api.nodes(node).qemu(vmid).status.shutdown.post, timeout=timeout
-        )
+        upid = await client.api_call(client.api.nodes(node).qemu(vmid).status.shutdown.post)
         return format_task_result({"data": upid})
     except Exception as e:
         return format_error_response(e)
@@ -338,7 +413,7 @@ async def clone_vm(
         node = await client.resolve_node(vmid, node)
         if client.is_dry_run:
             return client.dry_run_response("clone_vm", vmid=vmid, newid=newid, name=name, node=node)
-        kwargs = {"newid": newid, "name": name, "full": 1 if full else 0}
+        kwargs: dict[str, Any] = {"newid": newid, "name": name, "full": 1 if full else 0}
         if target_node:
             kwargs["target"] = target_node
         if target_storage:
@@ -407,7 +482,9 @@ async def create_vm(
         disk_size: Root disk size (default '32G').
         storage: Storage pool for disks (default 'local-lvm').
         net_bridge: Network bridge (default 'vmbr0').
-        os_type: OS type identifier (default 'l26' for Linux 2.6+).
+        os_type: OS type identifier. One of: 'l26' (default, Linux 2.6+),
+            'l20' (Linux 2.0-2.6), 'l10' (Linux 1.x), 'win' (Windows),
+            'solaris' (Solaris), 'nos' (no OS), or 'other'.
         start_after_create: Start the VM after creation (default False).
     """
     try:
@@ -418,7 +495,7 @@ async def create_vm(
             validate_vmid(vmid)
         if client.is_dry_run:
             return client.dry_run_response("create_vm", node=node, name=name, vmid=vmid)
-        kwargs = {
+        kwargs: dict[str, Any] = {
             "name": name,
             "memory": memory,
             "cores": cores,
@@ -480,11 +557,13 @@ async def delete_vm(
             }
         if client.is_dry_run:
             return client.dry_run_response("delete_vm", vmid=vmid, node=node)
-        kwargs = {}
+        kwargs: dict[str, Any] = {}
         if purge:
             kwargs["purge"] = 1
         if destroy_unreferenced_disks:
             kwargs["destroy-unreferenced-disks"] = 1
+        # NOTE: proxmoxer has no .delete for this endpoint; .delete on the VM
+        # resource object issues the GET-based DELETE the API expects here.
         logger.warning("DELETING VM %d on %s", vmid, node)
         upid = await client.api_call(client.api.nodes(node).qemu(vmid).delete, **kwargs)
         return format_task_result({"data": upid})
@@ -517,9 +596,7 @@ async def resize_vm_disk(
                 "resize_vm_disk", vmid=vmid, disk=disk, size=size, node=node
             )
         logger.info("Resizing disk '%s' on VM %d to %s", disk, vmid, size)
-        await client.api_call(
-            client.api.nodes(node).qemu(vmid).resize.put, disk=disk, size=size
-        )
+        await client.api_call(client.api.nodes(node).qemu(vmid).resize.put, disk=disk, size=size)
         return {
             "status": "success",
             "vmid": vmid,
@@ -559,13 +636,9 @@ async def convert_vm_to_template(
                 "action": "Call convert_vm_to_template again with confirm=True.",
             }
         if client.is_dry_run:
-            return client.dry_run_response(
-                "convert_vm_to_template", vmid=vmid, node=node
-            )
+            return client.dry_run_response("convert_vm_to_template", vmid=vmid, node=node)
         logger.warning("Converting VM %d to template on %s", vmid, node)
-        await client.api_call(
-            client.api.nodes(node).qemu(vmid).template.post
-        )
+        await client.api_call(client.api.nodes(node).qemu(vmid).template.post)
         return {
             "status": "success",
             "vmid": vmid,
@@ -605,7 +678,10 @@ async def modify_vm_config(
         cpu_type: CPU type (e.g. 'host', 'kvm64').
         onboot: Start on boot.
         tags: Semicolon-separated tags.
-        extra_config: JSON string of additional config key/value pairs.
+        extra_config: JSON string of additional config key/value pairs. Only
+            keys in VM_SAFE_CONFIG_KEYS are allowed (e.g. 'cores', 'memory',
+            'boot', 'ipconfig0', 'onboot', 'tags' - see VM_SAFE_CONFIG_KEYS
+            in this module); all other keys are rejected.
     """
     try:
         client = get_client()
@@ -614,19 +690,19 @@ async def modify_vm_config(
         node = await client.resolve_node(vmid, node)
         if client.is_dry_run:
             return client.dry_run_response("modify_vm_config", vmid=vmid, node=node)
-        kwargs = {}
+        kwargs: dict[str, Any] = {}
         if memory is not None:
-            kwargs["memory"] = memory
+            kwargs["memory"] = int(memory)
         if cores is not None:
-            kwargs["cores"] = cores
+            kwargs["cores"] = int(cores)
         if sockets is not None:
-            kwargs["sockets"] = sockets
+            kwargs["sockets"] = int(sockets)
         if name is not None:
             kwargs["name"] = name
         if description is not None:
             kwargs["description"] = description
         if balloon is not None:
-            kwargs["balloon"] = balloon
+            kwargs["balloon"] = int(balloon)
         if cpu_type is not None:
             kwargs["cpu"] = cpu_type
         if onboot is not None:
@@ -635,10 +711,18 @@ async def modify_vm_config(
             kwargs["tags"] = tags
         if extra_config:
             extra = json.loads(extra_config)
+            for _key, _val in extra.items():
+                if isinstance(_val, str) and len(_val) > MAX_EXTRA_CONFIG_VALUE_LEN:
+                    return format_error_response(
+                        InvalidParameterError(
+                            f"extra_config value for key '{_key}' exceeds "
+                            f"{MAX_EXTRA_CONFIG_VALUE_LEN} characters."
+                        )
+                    )
             unsafe_keys = [k for k in extra if k not in VM_SAFE_CONFIG_KEYS]
             if unsafe_keys:
                 return format_error_response(
-                    Exception(
+                    InvalidParameterError(
                         f"Keys not in allowlist: {unsafe_keys}. "
                         f"Modifying these keys is restricted for safety."
                     )
@@ -655,7 +739,7 @@ async def modify_vm_config(
         return {"status": "success", "vmid": vmid, "node": node, "changes": list(kwargs.keys())}
     except json.JSONDecodeError:
         return format_error_response(
-            Exception("extra_config must be valid JSON"),
+            InvalidParameterError("extra_config must be valid JSON"),
             suggestion='Example: \'{"boot": "order=scsi0;net0"}\'',
         )
     except Exception as e:
@@ -681,7 +765,7 @@ async def set_vm_cloudinit(
         node: The node name. Auto-detected if omitted.
         ciuser: Default user name.
         cipassword: Password for the default user.
-        sshkeys: URL-encoded SSH public keys (newline-separated).
+        sshkeys: SSH public keys (PEM format), newline-separated.
         ipconfig0: IP config for first interface (e.g. 'ip=dhcp' or
             'ip=10.0.0.5/24,gw=10.0.0.1').
         ipconfig1: IP config for second interface.
@@ -695,7 +779,7 @@ async def set_vm_cloudinit(
         node = await client.resolve_node(vmid, node)
         if client.is_dry_run:
             return client.dry_run_response("set_vm_cloudinit", vmid=vmid, node=node)
-        kwargs: dict = {}
+        kwargs: dict[str, Any] = {}
         if ciuser is not None:
             kwargs["ciuser"] = ciuser
         if cipassword is not None:
@@ -711,13 +795,9 @@ async def set_vm_cloudinit(
         if searchdomain is not None:
             kwargs["searchdomain"] = searchdomain
         if not kwargs:
-            return format_error_response(
-                Exception("No cloud-init settings specified.")
-            )
+            return format_error_response(InvalidParameterError("No cloud-init settings specified."))
         logger.info("Setting cloud-init on VM %d: %s", vmid, list(kwargs.keys()))
-        await client.api_call(
-            client.api.nodes(node).qemu(vmid).config.put, **kwargs
-        )
+        await client.api_call(client.api.nodes(node).qemu(vmid).config.put, **kwargs)
         return {
             "status": "success",
             "vmid": vmid,
@@ -744,13 +824,9 @@ async def regenerate_cloudinit_image(vmid: int, node: str | None = None) -> dict
         client.check_protected(vmid)
         node = await client.resolve_node(vmid, node)
         if client.is_dry_run:
-            return client.dry_run_response(
-                "regenerate_cloudinit_image", vmid=vmid, node=node
-            )
+            return client.dry_run_response("regenerate_cloudinit_image", vmid=vmid, node=node)
         logger.info("Regenerating cloud-init image for VM %d on %s", vmid, node)
-        await client.api_call(
-            client.api.nodes(node).qemu(vmid).cloudinit.post
-        )
+        await client.api_call(client.api.nodes(node).qemu(vmid).cloudinit.post)
         return {
             "status": "success",
             "vmid": vmid,

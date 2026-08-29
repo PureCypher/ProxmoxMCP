@@ -1,7 +1,8 @@
 """Backup and snapshot management tools."""
 
 import logging
-from typing import TYPE_CHECKING
+import re
+from typing import TYPE_CHECKING, Any
 
 from proxmox_mcp.utils.errors import InvalidParameterError, format_error_response
 from proxmox_mcp.utils.formatters import format_task_result
@@ -17,9 +18,9 @@ logger = logging.getLogger("proxmox-mcp")
 
 
 def get_client() -> "ProxmoxClient":
-    from proxmox_mcp.server import proxmox_client
+    from proxmox_mcp.server import get_server_client
 
-    return proxmox_client
+    return get_server_client()
 
 
 def get_mcp() -> "FastMCP":
@@ -32,12 +33,26 @@ mcp = get_mcp()
 
 VALID_VM_TYPES = frozenset({"qemu", "lxc"})
 
+VALID_SCHEDULE_PERIODS = frozenset({"hourly", "daily", "weekly", "monthly"})
+_AT_TIME_RE = re.compile(r"^at (\d{1,2}):(\d{2})$")
+
 
 def _validate_vm_type(vm_type: str) -> None:
     if vm_type not in VALID_VM_TYPES:
-        raise InvalidParameterError(
-            f"vm_type must be 'qemu' or 'lxc', got '{vm_type}'."
-        )
+        raise InvalidParameterError(f"vm_type must be 'qemu' or 'lxc', got '{vm_type}'.")
+
+
+def _validate_schedule(schedule: str) -> None:
+    """Validate a PVE backup-job schedule ('hourly'|'daily'|'weekly'|'monthly'|'at HH:mm')."""
+    if schedule in VALID_SCHEDULE_PERIODS:
+        return
+    m = _AT_TIME_RE.match(schedule)
+    if m and 0 <= int(m.group(1)) <= 23 and 0 <= int(m.group(2)) <= 59:
+        return
+    raise InvalidParameterError(
+        f"Invalid schedule '{schedule}'. Must be one of hourly, daily, weekly, "
+        f"monthly, or 'at HH:mm' (e.g. 'at 02:00')."
+    )
 
 
 @mcp.tool()
@@ -67,7 +82,7 @@ async def create_snapshot(
         node = await client.resolve_node(vmid, node)
         if client.is_dry_run:
             return client.dry_run_response("create_snapshot", vmid=vmid, snapname=snapname)
-        kwargs = {"snapname": snapname}
+        kwargs: dict[str, Any] = {"snapname": snapname}
         if description:
             kwargs["description"] = description
         if include_vmstate and vm_type == "qemu":
@@ -224,7 +239,7 @@ async def create_backup(
         node = await client.resolve_node(vmid, node)
         if client.is_dry_run:
             return client.dry_run_response("create_backup", vmid=vmid, storage=storage)
-        kwargs = {
+        kwargs: dict[str, Any] = {
             "vmid": vmid,
             "storage": storage,
             "mode": mode,
@@ -252,7 +267,7 @@ async def list_backups(node: str, storage: str = "local", vmid: int | None = Non
         client = get_client()
         validate_node_name(node)
         client.validate_node(node)
-        kwargs = {"content": "backup"}
+        kwargs: dict[str, Any] = {"content": "backup"}
         data = await client.api_call(client.api.nodes(node).storage(storage).content.get, **kwargs)
         if vmid is not None:
             vmid_str = str(vmid)
@@ -307,7 +322,12 @@ async def restore_backup(
             return client.dry_run_response("restore_backup", archive=archive, vmid=vmid, node=node)
         # Detect type from archive name
         if archive.startswith("vzdump-lxc-") or "/vzdump-lxc-" in archive:
-            kwargs = {"ostemplate": archive, "vmid": vmid, "storage": storage, "restore": 1}
+            kwargs: dict[str, Any] = {
+                "ostemplate": archive,
+                "vmid": vmid,
+                "storage": storage,
+                "restore": 1,
+            }
             if force:
                 kwargs["force"] = 1
             logger.warning("Restoring LXC backup %s as VMID %d on %s", archive, vmid, node)
@@ -361,7 +381,8 @@ async def create_backup_job(
 
     Args:
         storage: Target storage for backups (e.g. 'local', 'nfs-backup').
-        schedule: Cron-like schedule (e.g. '0 2 * * *' for daily at 2am).
+        schedule: PVE backup schedule - one of 'hourly', 'daily', 'weekly',
+            'monthly', or 'at HH:mm' (e.g. 'at 02:00').
         vmid: Comma-separated VMIDs to back up (e.g. '100,101,102').
         all_vms: Back up all VMs/CTs (overrides vmid).
         mode: Backup mode - 'snapshot', 'suspend', or 'stop' (default 'snapshot').
@@ -373,11 +394,10 @@ async def create_backup_job(
     """
     try:
         client = get_client()
+        _validate_schedule(schedule)
         if client.is_dry_run:
-            return client.dry_run_response(
-                "create_backup_job", storage=storage, schedule=schedule
-            )
-        kwargs: dict = {
+            return client.dry_run_response("create_backup_job", storage=storage, schedule=schedule)
+        kwargs: dict[str, Any] = {
             "storage": storage,
             "schedule": schedule,
             "mode": mode,

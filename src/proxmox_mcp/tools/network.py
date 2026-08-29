@@ -1,7 +1,7 @@
 """Network and firewall management tools."""
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from proxmox_mcp.utils.errors import InvalidParameterError, format_error_response
 from proxmox_mcp.utils.validators import validate_node_name, validate_vmid
@@ -14,13 +14,15 @@ if TYPE_CHECKING:
 VALID_FW_ACTIONS = frozenset({"ACCEPT", "DROP", "REJECT"})
 VALID_FW_TYPES = frozenset({"in", "out", "group"})
 
+NOT_FOUND_MARKERS = ("404", "not found", "does not exist")
+
 logger = logging.getLogger("proxmox-mcp")
 
 
 def get_client() -> "ProxmoxClient":
-    from proxmox_mcp.server import proxmox_client
+    from proxmox_mcp.server import get_server_client
 
-    return proxmox_client
+    return get_server_client()
 
 
 def get_mcp() -> "FastMCP":
@@ -61,10 +63,17 @@ async def get_vm_firewall_rules(vmid: int, node: str | None = None) -> dict:
         client = get_client()
         validate_vmid(vmid)
         node = await client.resolve_node(vmid, node)
-        # Try QEMU first, fall back to LXC
+        # Try QEMU first, fall back to LXC only if the resource is not found.
         try:
             data = await client.api_call(client.api.nodes(node).qemu(vmid).firewall.rules.get)
-        except Exception:
+        except Exception as e:
+            if not any(m in str(e).lower() for m in NOT_FOUND_MARKERS):
+                return format_error_response(
+                    e,
+                    suggestion=(
+                        f"resource type mismatch — is {vmid} a VM or container on node {node}?"
+                    ),
+                )
             data = await client.api_call(client.api.nodes(node).lxc(vmid).firewall.rules.get)
         return {"status": "success", "vmid": vmid, "node": node, "rules": data, "total": len(data)}
     except Exception as e:
@@ -83,13 +92,20 @@ async def get_vm_interfaces(vmid: int, node: str | None = None) -> dict:
         client = get_client()
         validate_vmid(vmid)
         node = await client.resolve_node(vmid, node)
-        # Try QEMU agent first, fall back to LXC interfaces
+        # Try QEMU agent first, fall back to LXC only if the resource is not found.
         try:
             data = await client.api_call(
                 client.api.nodes(node).qemu(vmid).agent("network-get-interfaces").get
             )
             interfaces = data.get("result", data)
-        except Exception:
+        except Exception as e:
+            if not any(m in str(e).lower() for m in NOT_FOUND_MARKERS):
+                return format_error_response(
+                    e,
+                    suggestion=(
+                        f"resource type mismatch — is {vmid} a VM or container on node {node}?"
+                    ),
+                )
             data = await client.api_call(client.api.nodes(node).lxc(vmid).interfaces.get)
             interfaces = data
         return {"status": "success", "vmid": vmid, "node": node, "interfaces": interfaces}
@@ -144,7 +160,7 @@ async def create_node_firewall_rule(
             return client.dry_run_response(
                 "create_node_firewall_rule", node=node, action=action, type=type
             )
-        kwargs: dict = {"action": action, "type": type, "enable": 1 if enable else 0}
+        kwargs: dict[str, Any] = {"action": action, "type": type, "enable": 1 if enable else 0}
         if source:
             kwargs["source"] = source
         if dest:
@@ -190,9 +206,7 @@ async def delete_node_firewall_rule(
                 "action": "Call delete_node_firewall_rule with confirm=True to proceed.",
             }
         if client.is_dry_run:
-            return client.dry_run_response(
-                "delete_node_firewall_rule", node=node, pos=pos
-            )
+            return client.dry_run_response("delete_node_firewall_rule", node=node, pos=pos)
         logger.warning("Deleting firewall rule %d on node '%s'", pos, node)
         await client.api_call(client.api.nodes(node).firewall.rules(pos).delete)
         return {"status": "success", "node": node, "deleted_pos": pos}
@@ -250,7 +264,7 @@ async def create_vm_firewall_rule(
             return client.dry_run_response(
                 "create_vm_firewall_rule", vmid=vmid, action=action, type=type
             )
-        kwargs: dict = {"action": action, "type": type, "enable": 1 if enable else 0}
+        kwargs: dict[str, Any] = {"action": action, "type": type, "enable": 1 if enable else 0}
         if source:
             kwargs["source"] = source
         if dest:
@@ -270,9 +284,7 @@ async def create_vm_firewall_rule(
             if vm_type == "qemu"
             else client.api.nodes(node).lxc(vmid)
         )
-        logger.info(
-            "Creating firewall rule on %s %d: %s %s", vm_type, vmid, action, type
-        )
+        logger.info("Creating firewall rule on %s %d: %s %s", vm_type, vmid, action, type)
         await client.api_call(api_path.firewall.rules.post, **kwargs)
         return {"status": "success", "vmid": vmid, "node": node, "rule": kwargs}
     except Exception as e:
@@ -305,23 +317,18 @@ async def delete_vm_firewall_rule(
             return {
                 "status": "confirmation_required",
                 "warning": (
-                    f"This will delete firewall rule at position {pos} "
-                    f"on {vm_type} {vmid}."
+                    f"This will delete firewall rule at position {pos} on {vm_type} {vmid}."
                 ),
                 "action": "Call delete_vm_firewall_rule with confirm=True.",
             }
         if client.is_dry_run:
-            return client.dry_run_response(
-                "delete_vm_firewall_rule", vmid=vmid, pos=pos
-            )
+            return client.dry_run_response("delete_vm_firewall_rule", vmid=vmid, pos=pos)
         api_path = (
             client.api.nodes(node).qemu(vmid)
             if vm_type == "qemu"
             else client.api.nodes(node).lxc(vmid)
         )
-        logger.warning(
-            "Deleting firewall rule %d on %s %d", pos, vm_type, vmid
-        )
+        logger.warning("Deleting firewall rule %d on %s %d", pos, vm_type, vmid)
         await client.api_call(api_path.firewall.rules(pos).delete)
         return {"status": "success", "vmid": vmid, "node": node, "deleted_pos": pos}
     except Exception as e:

@@ -1,9 +1,10 @@
 """Cluster-level tools for Proxmox VE."""
 
 import logging
-from typing import TYPE_CHECKING
+import re
+from typing import TYPE_CHECKING, Any
 
-from proxmox_mcp.utils.errors import format_error_response
+from proxmox_mcp.utils.errors import InvalidParameterError, format_error_response
 
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
@@ -12,11 +13,14 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("proxmox-mcp")
 
+MAX_LOG_ENTRIES = 1000
+VALID_ROLE_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+
 
 def get_client() -> "ProxmoxClient":
-    from proxmox_mcp.server import proxmox_client
+    from proxmox_mcp.server import get_server_client
 
-    return proxmox_client
+    return get_server_client()
 
 
 def get_mcp() -> "FastMCP":
@@ -83,7 +87,7 @@ async def get_cluster_resources(resource_type: str | None = None) -> dict:
     try:
         client = get_client()
         logger.info("Fetching cluster resources (type=%s)", resource_type)
-        kwargs = {}
+        kwargs: dict[str, Any] = {}
         if resource_type:
             kwargs["type"] = resource_type
         data = await client.api_call(client.api.cluster.resources.get, **kwargs)
@@ -105,9 +109,17 @@ async def get_cluster_log(max_entries: int = 50) -> dict:
 
     Args:
         max_entries: Maximum number of log entries to return (default: 50).
+            Capped at 1000.
     """
     try:
         client = get_client()
+        if max_entries > MAX_LOG_ENTRIES:
+            logger.info(
+                "get_cluster_log: max_entries %d exceeds cap, clamping to %d",
+                max_entries,
+                MAX_LOG_ENTRIES,
+            )
+            max_entries = MAX_LOG_ENTRIES
         logger.info("Fetching cluster log (max_entries=%d)", max_entries)
         data = await client.api_call(client.api.cluster.log.get, max=max_entries)
 
@@ -174,7 +186,7 @@ async def create_pool(poolid: str, comment: str | None = None) -> dict:
         client = get_client()
         if client.is_dry_run:
             return client.dry_run_response("create_pool", poolid=poolid)
-        kwargs = {"poolid": poolid}
+        kwargs: dict[str, Any] = {"poolid": poolid}
         if comment:
             kwargs["comment"] = comment
         logger.info("Creating resource pool '%s'", poolid)
@@ -210,7 +222,7 @@ async def modify_pool(
         client = get_client()
         if client.is_dry_run:
             return client.dry_run_response("modify_pool", poolid=poolid)
-        kwargs: dict = {}
+        kwargs: dict[str, Any] = {}
         if comment is not None:
             kwargs["comment"] = comment
         if vms:
@@ -221,7 +233,7 @@ async def modify_pool(
             kwargs["delete"] = 1
         if not kwargs:
             return format_error_response(
-                Exception("No changes specified for pool modification.")
+                InvalidParameterError("No changes specified for pool modification.")
             )
         logger.info("Modifying pool '%s': %s", poolid, list(kwargs.keys()))
         await client.api_call(client.api.pools(poolid).put, **kwargs)
@@ -298,6 +310,7 @@ async def create_user(
     groups: str | None = None,
     comment: str | None = None,
     enable: bool = True,
+    confirm: bool = False,
 ) -> dict:
     """Create a new user.
 
@@ -310,12 +323,23 @@ async def create_user(
         groups: Comma-separated group names.
         comment: User comment/description.
         enable: Enable the user (default True).
+        confirm: Must be True to execute. WARNING: creates a PVE user with
+            a password. False returns a confirmation prompt.
     """
     try:
         client = get_client()
+        if not confirm:
+            return {
+                "status": "confirmation_required",
+                "warning": (
+                    f"This will create PVE user '{userid}' with a password. "
+                    f"User creation is a security-sensitive operation."
+                ),
+                "action": "Call create_user again with confirm=True to proceed.",
+            }
         if client.is_dry_run:
             return client.dry_run_response("create_user", userid=userid)
-        kwargs: dict = {"userid": userid, "enable": 1 if enable else 0}
+        kwargs: dict[str, Any] = {"userid": userid, "enable": 1 if enable else 0}
         if password:
             kwargs["password"] = password
         if email:
@@ -393,6 +417,7 @@ async def set_user_permission(
     users: str | None = None,
     groups: str | None = None,
     propagate: bool = True,
+    confirm: bool = False,
 ) -> dict:
     """Set access control permissions (ACL).
 
@@ -402,18 +427,57 @@ async def set_user_permission(
         users: Comma-separated user IDs to grant (e.g. 'john@pve').
         groups: Comma-separated group names to grant.
         propagate: Propagate to child objects (default True).
+        confirm: Must be True to execute. False returns a confirmation prompt.
     """
     try:
         client = get_client()
         if not users and not groups:
             return format_error_response(
-                Exception("Must specify either 'users' or 'groups' (or both).")
+                InvalidParameterError("Must specify either 'users' or 'groups' (or both).")
             )
+        if not roles:
+            return format_error_response(
+                InvalidParameterError("'roles' must be a non-empty string.")
+            )
+        role_names = [r.strip() for r in roles.split(",") if r.strip()]
+        invalid_roles = [r for r in role_names if not VALID_ROLE_RE.match(r)]
+        if invalid_roles:
+            return format_error_response(
+                InvalidParameterError(
+                    f"Invalid role name(s): {invalid_roles}. Roles may only "
+                    f"contain letters, digits, '_', and '-' (comma-separated)."
+                )
+            )
+        if not (path == "/" or path.startswith("/")) or ".." in path:
+            return format_error_response(
+                InvalidParameterError(
+                    f"Invalid ACL path '{path}'. Must be '/' or start with '/' "
+                    f"and must not contain '..'."
+                )
+            )
+        available_roles = await client.api_call(client.api.access.roles.get)
+        known_roles = {r.get("roleid") for r in available_roles}
+        unknown_roles = [r for r in role_names if r not in known_roles]
+        if unknown_roles:
+            return format_error_response(
+                InvalidParameterError(
+                    f"Unknown role(s): {unknown_roles}. "
+                    f"Available roles include: {sorted(known_roles)}"
+                )
+            )
+        if not confirm:
+            return {
+                "status": "confirmation_required",
+                "warning": (
+                    f"This will grant role(s) '{roles}' on path '{path}' "
+                    f"to users '{users or ''}' and groups '{groups or ''}'. "
+                    f"Granting broad roles (e.g. PVEAdmin) is security-sensitive."
+                ),
+                "action": "Call set_user_permission again with confirm=True to proceed.",
+            }
         if client.is_dry_run:
-            return client.dry_run_response(
-                "set_user_permission", path=path, roles=roles
-            )
-        kwargs: dict = {"path": path, "roles": roles, "propagate": 1 if propagate else 0}
+            return client.dry_run_response("set_user_permission", path=path, roles=roles)
+        kwargs: dict[str, Any] = {"path": path, "roles": roles, "propagate": 1 if propagate else 0}
         if users:
             kwargs["users"] = users
         if groups:
@@ -478,14 +542,13 @@ async def create_ha_resource(
         client = get_client()
         if state not in VALID_HA_STATES:
             return format_error_response(
-                Exception(
-                    f"Invalid state '{state}'. "
-                    f"Must be one of: {', '.join(sorted(VALID_HA_STATES))}"
+                InvalidParameterError(
+                    f"Invalid state '{state}'. Must be one of: {', '.join(sorted(VALID_HA_STATES))}"
                 )
             )
         if client.is_dry_run:
             return client.dry_run_response("create_ha_resource", sid=sid, state=state)
-        kwargs: dict = {"sid": sid, "state": state}
+        kwargs: dict[str, Any] = {"sid": sid, "state": state}
         if group:
             kwargs["group"] = group
         if max_restart is not None:
@@ -530,14 +593,13 @@ async def modify_ha_resource(
         client = get_client()
         if state is not None and state not in VALID_HA_STATES:
             return format_error_response(
-                Exception(
-                    f"Invalid state '{state}'. "
-                    f"Must be one of: {', '.join(sorted(VALID_HA_STATES))}"
+                InvalidParameterError(
+                    f"Invalid state '{state}'. Must be one of: {', '.join(sorted(VALID_HA_STATES))}"
                 )
             )
         if client.is_dry_run:
             return client.dry_run_response("modify_ha_resource", sid=sid)
-        kwargs: dict = {}
+        kwargs: dict[str, Any] = {}
         if state is not None:
             kwargs["state"] = state
         if group is not None:
@@ -550,7 +612,7 @@ async def modify_ha_resource(
             kwargs["comment"] = comment
         if not kwargs:
             return format_error_response(
-                Exception("No changes specified for HA resource.")
+                InvalidParameterError("No changes specified for HA resource.")
             )
         logger.info("Modifying HA resource '%s': %s", sid, list(kwargs.keys()))
         await client.api_call(client.api.cluster.ha.resources(sid).put, **kwargs)

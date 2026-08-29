@@ -2,9 +2,9 @@
 
 import json
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from proxmox_mcp.utils.errors import format_error_response
+from proxmox_mcp.utils.errors import InvalidParameterError, format_error_response
 from proxmox_mcp.utils.formatters import format_container_summary, format_task_result
 from proxmox_mcp.utils.validators import validate_node_name, validate_vmid
 
@@ -15,26 +15,51 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("proxmox-mcp")
 
+DEFAULT_SHUTDOWN_TIMEOUT = 60
+MAX_EXTRA_CONFIG_VALUE_LEN = 4096
+
 # Allowlist of container config keys safe to modify via extra_config.
-CT_SAFE_CONFIG_KEYS = frozenset({
-    # Resources
-    "memory", "swap", "cores", "cpulimit", "cpuunits",
-    # Identity
-    "hostname", "description", "tags", "onboot", "startup", "protection",
-    # Storage
-    "rootfs", "mp0", "mp1", "mp2", "mp3",
-    # Network
-    "net0", "net1", "net2", "net3",
-    "nameserver", "searchdomain",
-    # OS
-    "ostype", "arch", "unprivileged", "features",
-})
+CT_SAFE_CONFIG_KEYS = frozenset(
+    {
+        # Resources
+        "memory",
+        "swap",
+        "cores",
+        "cpulimit",
+        "cpuunits",
+        # Identity
+        "hostname",
+        "description",
+        "tags",
+        "onboot",
+        "startup",
+        "protection",
+        # Storage
+        "rootfs",
+        "mp0",
+        "mp1",
+        "mp2",
+        "mp3",
+        # Network
+        "net0",
+        "net1",
+        "net2",
+        "net3",
+        "nameserver",
+        "searchdomain",
+        # OS
+        "ostype",
+        "arch",
+        "unprivileged",
+        "features",
+    }
+)
 
 
 def get_client() -> "ProxmoxClient":
-    from proxmox_mcp.server import proxmox_client
+    from proxmox_mcp.server import get_server_client
 
-    return proxmox_client
+    return get_server_client()
 
 
 def get_mcp() -> "FastMCP":
@@ -120,6 +145,7 @@ async def start_container(vmid: int, node: str | None = None) -> dict:
     try:
         client = get_client()
         validate_vmid(vmid)
+        client.check_protected(vmid)
         node = await client.resolve_node(vmid, node)
         if client.is_dry_run:
             return client.dry_run_response("start_container", vmid=vmid, node=node)
@@ -153,13 +179,16 @@ async def stop_container(vmid: int, node: str | None = None) -> dict:
 
 
 @mcp.tool()
-async def shutdown_container(vmid: int, node: str | None = None, timeout: int = 60) -> dict:
+async def shutdown_container(
+    vmid: int, node: str | None = None, timeout: int = DEFAULT_SHUTDOWN_TIMEOUT
+) -> dict:
     """Graceful shutdown of an LXC container.
 
     Args:
         vmid: The container ID.
         node: The node name. Auto-detected if omitted.
-        timeout: Timeout in seconds (default 60).
+        timeout: Accepted for compatibility; the PVE API's default soft-off
+            timeout applies (the API endpoint takes no timeout parameter).
     """
     try:
         client = get_client()
@@ -169,9 +198,7 @@ async def shutdown_container(vmid: int, node: str | None = None, timeout: int = 
         if client.is_dry_run:
             return client.dry_run_response("shutdown_container", vmid=vmid, node=node)
         logger.info("Graceful shutdown of container %d on %s", vmid, node)
-        upid = await client.api_call(
-            client.api.nodes(node).lxc(vmid).status.shutdown.post, timeout=timeout
-        )
+        upid = await client.api_call(client.api.nodes(node).lxc(vmid).status.shutdown.post)
         return format_task_result({"data": upid})
     except Exception as e:
         return format_error_response(e)
@@ -225,7 +252,7 @@ async def clone_container(
         node = await client.resolve_node(vmid, node)
         if client.is_dry_run:
             return client.dry_run_response("clone_container", vmid=vmid, newid=newid, name=name)
-        kwargs = {"newid": newid, "hostname": name, "full": 1 if full else 0}
+        kwargs: dict[str, Any] = {"newid": newid, "hostname": name, "full": 1 if full else 0}
         if target_node:
             kwargs["target"] = target_node
         logger.info("Cloning container %d to %d on %s", vmid, newid, node)
@@ -281,7 +308,7 @@ async def create_container(
     memory: int = 512,
     swap: int = 512,
     cores: int = 1,
-    rootfs_size: str = "8",
+    rootfs_size: int = 8,
     storage: str = "local-lvm",
     net_bridge: str = "vmbr0",
     ip_config: str = "dhcp",
@@ -300,7 +327,7 @@ async def create_container(
         memory: RAM in MB (default 512).
         swap: Swap in MB (default 512).
         cores: CPU cores (default 1).
-        rootfs_size: Root filesystem size in GB (default '8').
+        rootfs_size: Root filesystem size in GB (default 8).
         storage: Storage pool (default 'local-lvm').
         net_bridge: Network bridge (default 'vmbr0').
         ip_config: IP config - 'dhcp' or 'ip=x.x.x.x/xx,gw=x.x.x.x' (default 'dhcp').
@@ -320,7 +347,7 @@ async def create_container(
             ip_value = "ip=dhcp"
         else:
             ip_value = ip_config
-        kwargs = {
+        kwargs: dict[str, Any] = {
             "ostemplate": ostemplate,
             "hostname": hostname,
             "memory": memory,
@@ -380,7 +407,7 @@ async def delete_container(
             }
         if client.is_dry_run:
             return client.dry_run_response("delete_container", vmid=vmid, node=node)
-        kwargs = {}
+        kwargs: dict[str, Any] = {}
         if purge:
             kwargs["purge"] = 1
         if force:
@@ -417,7 +444,10 @@ async def modify_container_config(
         description: Description.
         onboot: Start on boot.
         tags: Semicolon-separated tags.
-        extra_config: JSON string of additional config key/value pairs.
+        extra_config: JSON string of additional config key/value pairs. Only
+            keys in CT_SAFE_CONFIG_KEYS are allowed (e.g. 'memory', 'cores',
+            'hostname', 'net0', 'onboot', 'tags' - see CT_SAFE_CONFIG_KEYS
+            in this module); all other keys are rejected.
     """
     try:
         client = get_client()
@@ -426,7 +456,7 @@ async def modify_container_config(
         node = await client.resolve_node(vmid, node)
         if client.is_dry_run:
             return client.dry_run_response("modify_container_config", vmid=vmid, node=node)
-        kwargs = {}
+        kwargs: dict[str, Any] = {}
         if memory is not None:
             kwargs["memory"] = memory
         if swap is not None:
@@ -443,10 +473,18 @@ async def modify_container_config(
             kwargs["tags"] = tags
         if extra_config:
             extra = json.loads(extra_config)
+            for _key, _val in extra.items():
+                if isinstance(_val, str) and len(_val) > MAX_EXTRA_CONFIG_VALUE_LEN:
+                    return format_error_response(
+                        InvalidParameterError(
+                            f"extra_config value for key '{_key}' exceeds "
+                            f"{MAX_EXTRA_CONFIG_VALUE_LEN} characters."
+                        )
+                    )
             unsafe_keys = [k for k in extra if k not in CT_SAFE_CONFIG_KEYS]
             if unsafe_keys:
                 return format_error_response(
-                    Exception(
+                    InvalidParameterError(
                         f"Keys not in allowlist: {unsafe_keys}. "
                         f"Modifying these keys is restricted for safety."
                     )
@@ -462,6 +500,6 @@ async def modify_container_config(
         await client.api_call(client.api.nodes(node).lxc(vmid).config.put, **kwargs)
         return {"status": "success", "vmid": vmid, "node": node, "changes": list(kwargs.keys())}
     except json.JSONDecodeError:
-        return format_error_response(Exception("extra_config must be valid JSON"))
+        return format_error_response(InvalidParameterError("extra_config must be valid JSON"))
     except Exception as e:
         return format_error_response(e)

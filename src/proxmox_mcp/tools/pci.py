@@ -20,9 +20,9 @@ logger = logging.getLogger("proxmox-mcp")
 
 
 def get_client() -> "ProxmoxClient":
-    from proxmox_mcp.server import proxmox_client
+    from proxmox_mcp.server import get_server_client
 
-    return proxmox_client
+    return get_server_client()
 
 
 def get_mcp() -> "FastMCP":
@@ -138,7 +138,7 @@ async def create_pci_mapping(
             )
         device = await _lookup_pci_device(client, node, path)
         map_entry = _build_map_entry(node, path, device)
-        kwargs: dict = {"id": mapping_id, "map": [map_entry]}
+        kwargs: dict[str, Any] = {"id": mapping_id, "map": [map_entry]}
         if comment:
             kwargs["comment"] = comment
         logger.info("Creating PCI mapping '%s' -> %s on node '%s'", mapping_id, path, node)
@@ -269,8 +269,7 @@ async def assign_pci_device(
             return {
                 "status": "confirmation_required",
                 "warning": (
-                    f"This will attach PCI mapping '{mapping_id}' to VM {vmid} "
-                    f"as hostpci{slot}."
+                    f"This will attach PCI mapping '{mapping_id}' to VM {vmid} as hostpci{slot}."
                 ),
                 "action": "Call assign_pci_device with confirm=True to proceed.",
             }
@@ -283,10 +282,8 @@ async def assign_pci_device(
             f"mapping={mapping_id},pcie={1 if pcie else 0},"
             f"rombar={1 if rombar else 0},x-vga={1 if x_vga else 0}"
         )
-        kwargs = {f"hostpci{slot}": value}
-        logger.info(
-            "Assigning PCI mapping '%s' to VM %d as hostpci%d", mapping_id, vmid, slot
-        )
+        kwargs: dict[str, Any] = {f"hostpci{slot}": value}
+        logger.info("Assigning PCI mapping '%s' to VM %d as hostpci%d", mapping_id, vmid, slot)
         await client.api_call(client.api.nodes(node).qemu(vmid).config.put, **kwargs)
         return {
             "status": "success",
@@ -330,9 +327,7 @@ async def remove_pci_device(
         if client.is_dry_run:
             return client.dry_run_response("remove_pci_device", vmid=vmid, slot=slot)
         logger.warning("Removing hostpci%d from VM %d", slot, vmid)
-        await client.api_call(
-            client.api.nodes(node).qemu(vmid).config.put, delete=f"hostpci{slot}"
-        )
+        await client.api_call(client.api.nodes(node).qemu(vmid).config.put, delete=f"hostpci{slot}")
         return {"status": "success", "vmid": vmid, "node": node, "slot": slot}
     except Exception as e:
         return format_error_response(e)
