@@ -1,10 +1,10 @@
 # ProxmoxMCP
 
-MCP (Model Context Protocol) server for managing Proxmox VE infrastructure through AI assistants like Claude. Exposes **98 tools**, **10 resources**, and **6 prompt templates** via FastMCP.
+MCP (Model Context Protocol) server for managing Proxmox VE infrastructure through AI assistants like Claude. Exposes **103 tools**, **10 resources**, and **6 prompt templates** via FastMCP.
 
 ## Features
 
-- **98 tools** across 10 domains: VMs, containers, storage, networking, PCI passthrough, backups, cluster, nodes, tasks, and disk management
+- **103 tools** across 11 domains: VMs, containers, storage, networking, PCI passthrough, backups, cluster, nodes, tasks, disk management, and SSH guest access
 - **Safety guards**: protected VMIDs, node allowlists, dry-run mode, confirmation prompts for destructive operations
 - **Async-first**: all Proxmox API calls run via `asyncio.to_thread()` for non-blocking operation
 - **SSH disk management**: partition, format, mount, and unmount physical disks via SSH
@@ -13,6 +13,18 @@ MCP (Model Context Protocol) server for managing Proxmox VE infrastructure throu
 ## Quick Start
 
 ### 1. Install
+
+```bash
+uv sync                      # this repo is uv-managed; uv.lock pins all versions
+```
+
+Or with development dependencies:
+
+```bash
+uv sync --dev
+```
+
+pip fallback (no lockfile):
 
 ```bash
 pip install -e .
@@ -43,11 +55,15 @@ PROXMOX_TOKEN_VALUE=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 ### 3. Run
 
 ```bash
-# CLI entry point
+# CLI entry point (stdio transport, default)
 proxmox-mcp
 
 # Or as a module
 python -m proxmox_mcp
+
+# HTTP transport: MCP_TRANSPORT=streamable-http proxmox-mcp
+# then point the client at http://<host>:3001/mcp
+# (MCP_HTTP_AUTH_TOKEN is required for the HTTP transport)
 ```
 
 ### 4. Connect to Claude Desktop
@@ -219,6 +235,16 @@ Add to your Claude Desktop config (`claude_desktop_config.json`):
 | `assign_pci_device` | Attach a PCI mapping to a VM's hostpci slot |
 | `remove_pci_device` | Detach a PCI device from a VM's hostpci slot |
 
+### SSH Guest Tools (5 tools)
+
+| Tool | Description |
+|------|-------------|
+| `install_package` | Install a package inside a guest VM/container over SSH |
+| `manage_service` | Start/stop/enable/disable a systemd service in a guest |
+| `transfer_file` | Copy a file to/from a guest over SSH |
+| `execute_script` | Run an arbitrary script inside a guest over SSH |
+| `get_system_info` | Report guest OS, uptime, and resource info over SSH |
+
 ## Configuration Reference
 
 | Variable | Default | Description |
@@ -236,9 +262,12 @@ Add to your Claude Desktop config (`claude_desktop_config.json`):
 | `PROXMOX_SSH_USER` | `root` | SSH user for disk tools |
 | `PROXMOX_SSH_PORT` | `22` | SSH port |
 | `PROXMOX_SSH_KEY_PATH` | | Path to SSH private key |
+| `PROXMOX_SSH_PASSWORD` | | SSH password (falls back to `PROXMOX_PASSWORD`) |
+| `PROXMOX_SSH_KNOWN_HOSTS` | `~/.ssh/known_hosts` | Path to SSH known_hosts file |
 | `PROXMOX_SSH_HOST_KEY_CHECKING` | `true` | Verify SSH host keys |
 | `MCP_TRANSPORT` | `stdio` | Transport: `stdio` or `streamable-http` |
 | `MCP_HTTP_PORT` | `3001` | HTTP port (when using streamable-http) |
+| `MCP_HTTP_AUTH_TOKEN` | | Bearer token, required when `MCP_TRANSPORT=streamable-http` |
 | `LOG_LEVEL` | `INFO` | Logging level |
 
 ## Safety Features
@@ -246,7 +275,7 @@ Add to your Claude Desktop config (`claude_desktop_config.json`):
 - **Protected VMIDs**: VMs in `PROXMOX_PROTECTED_VMIDS` cannot be modified, stopped, or deleted
 - **Node allowlist**: When `PROXMOX_ALLOWED_NODES` is set, operations are restricted to listed nodes
 - **Dry-run mode**: Set `PROXMOX_DRY_RUN=true` to simulate all write operations
-- **Confirmation prompts**: Destructive operations (delete, rollback, restore) require `confirm=True`
+- **Confirmation prompts**: Most destructive tools gate on `confirm=True`; disk tools use `confirm_destructive`. A `confirmation_required` response is returned until the flag is set.
 - **Input validation**: VMIDs, node names, snapshot names, and storage IDs are validated against injection
 - **Config key allowlists**: `modify_vm_config` blocks dangerous keys like `hookscript` and `hostpci`
 - **SSH host key verification**: Enabled by default for disk management operations
@@ -254,26 +283,26 @@ Add to your Claude Desktop config (`claude_desktop_config.json`):
 ## Development
 
 ```bash
-# Install with dev dependencies
-pip install -e ".[dev]"
+uv sync --dev                    # install the project + dev group (uv-managed repo)
 
-# Run tests
-pytest tests/
+# Run tests (may need PROXMOX_* env vars; conftest sets dummy defaults)
+# export PROXMOX_HOST=dummy PROXMOX_TOKEN_NAME=dummy PROXMOX_TOKEN_VALUE=dummy
+uv run pytest tests/
 
 # Run a single test file
-pytest tests/test_vm_tools.py
+uv run pytest tests/test_vm_tools.py
 
 # Run with coverage
-pytest tests/ --cov=src/proxmox_mcp --cov-report=html
+uv run pytest tests/ --cov=src/proxmox_mcp --cov-report=html
 
 # Lint
-ruff check src/ tests/
+uv run ruff check src/ tests/
 
 # Format
-ruff format src/ tests/
+uv run ruff format src/ tests/
 
 # Type check
-mypy src/proxmox_mcp
+uv run mypy src/proxmox_mcp
 ```
 
 ## Architecture
@@ -286,7 +315,7 @@ FastMCP server
         -> Proxmox REST API
 ```
 
-- **9 tool modules**: `vm`, `container`, `cluster`, `node`, `storage`, `backup`, `network`, `task`, `disk`
+- **11 tool modules**: `vm`, `container`, `cluster`, `node`, `storage`, `backup`, `network`, `task`, `disk`, `pci`, `ssh_tools`
 - **ProxmoxClient** (`client.py`): wraps proxmoxer with safety guards and async support
 - **Config** (`config.py`): pydantic-settings loading from `.env`
 - **Resources**: 10 read-only `proxmox://` URI resources returning cluster state as JSON
