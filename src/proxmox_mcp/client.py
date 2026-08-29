@@ -160,12 +160,18 @@ class ProxmoxClient:
         return node
 
     async def _query_node_for_vmid(self, vmid: int) -> str:
-        """Fetch the owning node for a VMID from cluster resources (uncached)."""
-        resources = await self.api_call(self._api.cluster.resources.get, type="vm")
+        """Fetch the owning node for a VM/CT ID from cluster resources (uncached).
+
+        Queries without a type filter so LXC container IDs (not just QEMU VMs)
+        resolve correctly.
+        """
+        resources = await self.api_call(self._api.cluster.resources.get)
         for r in resources:
             if r.get("vmid") == vmid:
                 return str(r["node"])
-        raise VMNotFoundError(f"VMID {vmid} not found in cluster.")
+        raise VMNotFoundError(
+            f"VM/CT {vmid} not found in cluster (searched {len(resources)} resources)."
+        )
 
     async def test_connection(self) -> dict:
         """Verify connectivity by calling GET /version."""

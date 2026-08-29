@@ -31,7 +31,6 @@ def mock_ssh():
 
 
 class TestListPhysicalDisks:
-    @pytest.mark.asyncio
     async def test_list_disks_success(self, mock_client, mock_ssh):
         from proxmox_mcp.tools.disk import list_physical_disks
 
@@ -78,7 +77,6 @@ class TestListPhysicalDisks:
         assert result["disks"][1]["device"] == "/dev/sdb"
         assert result["disks"][1]["in_use"] is False
 
-    @pytest.mark.asyncio
     async def test_list_disks_filter_unused(self, mock_client, mock_ssh):
         from proxmox_mcp.tools.disk import list_physical_disks
 
@@ -100,7 +98,6 @@ class TestListPhysicalDisks:
         assert result["count"] == 1
         assert result["disks"][0]["device"] == "/dev/sdb"
 
-    @pytest.mark.asyncio
     async def test_list_disks_invalid_node(self, mock_client, mock_ssh):
         from proxmox_mcp.tools.disk import list_physical_disks
 
@@ -112,7 +109,6 @@ class TestListPhysicalDisks:
 
         assert result["status"] == "error"
 
-    @pytest.mark.asyncio
     async def test_list_disks_api_error(self, mock_client, mock_ssh):
         from proxmox_mcp.tools.disk import list_physical_disks
 
@@ -133,7 +129,6 @@ class TestListPhysicalDisks:
 
 
 class TestPartitionDisk:
-    @pytest.mark.asyncio
     async def test_requires_confirm(self, mock_client, mock_ssh):
         from proxmox_mcp.tools.disk import partition_disk
 
@@ -146,7 +141,6 @@ class TestPartitionDisk:
         assert result["status"] == "confirmation_required"
         assert "DESTROY" in result["warning"]
 
-    @pytest.mark.asyncio
     async def test_rejects_partition_path(self, mock_client, mock_ssh):
         from proxmox_mcp.tools.disk import partition_disk
 
@@ -159,7 +153,6 @@ class TestPartitionDisk:
         assert result["status"] == "error"
         assert "whole disk" in result["message"] or "invalid" in result["message"].lower()
 
-    @pytest.mark.asyncio
     async def test_rejects_boot_disk(self, mock_client, mock_ssh):
         from proxmox_mcp.tools.disk import partition_disk
 
@@ -178,7 +171,6 @@ class TestPartitionDisk:
         assert result["status"] == "error"
         assert "boot" in result["message"].lower()
 
-    @pytest.mark.asyncio
     async def test_rejects_mounted_device(self, mock_client, mock_ssh):
         from proxmox_mcp.tools.disk import partition_disk
 
@@ -201,7 +193,6 @@ class TestPartitionDisk:
         assert result["status"] == "error"
         assert "mounted" in result["message"].lower() or "in use" in result["message"].lower()
 
-    @pytest.mark.asyncio
     async def test_rejects_device_not_found(self, mock_client, mock_ssh):
         from proxmox_mcp.tools.disk import partition_disk
 
@@ -216,7 +207,6 @@ class TestPartitionDisk:
         assert result["status"] == "error"
         assert "not found" in result["message"].lower()
 
-    @pytest.mark.asyncio
     async def test_rejects_shell_injection(self, mock_client, mock_ssh):
         from proxmox_mcp.tools.disk import partition_disk
 
@@ -229,7 +219,6 @@ class TestPartitionDisk:
         assert result["status"] == "error"
         assert "forbidden" in result["message"].lower() or "invalid" in result["message"].lower()
 
-    @pytest.mark.asyncio
     async def test_dry_run(self, mock_client, mock_ssh):
         from proxmox_mcp.tools.disk import partition_disk
 
@@ -255,7 +244,6 @@ class TestPartitionDisk:
 
         assert result["status"] == "dry_run"
 
-    @pytest.mark.asyncio
     async def test_success(self, mock_client, mock_ssh):
         from proxmox_mcp.tools.disk import partition_disk
 
@@ -299,7 +287,6 @@ class TestPartitionDisk:
 
 
 class TestFormatDisk:
-    @pytest.mark.asyncio
     async def test_requires_confirm(self, mock_client, mock_ssh):
         from proxmox_mcp.tools.disk import format_disk
 
@@ -311,7 +298,6 @@ class TestFormatDisk:
 
         assert result["status"] == "confirmation_required"
 
-    @pytest.mark.asyncio
     async def test_rejects_mounted_partition(self, mock_client, mock_ssh):
         from proxmox_mcp.tools.disk import format_disk
 
@@ -329,7 +315,6 @@ class TestFormatDisk:
         assert result["status"] == "error"
         assert "mounted" in result["message"].lower()
 
-    @pytest.mark.asyncio
     async def test_success(self, mock_client, mock_ssh):
         from proxmox_mcp.tools.disk import format_disk
 
@@ -361,7 +346,6 @@ class TestFormatDisk:
         assert result["filesystem"] == "ext4"
         assert result["uuid"] == "abcd-ef01"
 
-    @pytest.mark.asyncio
     async def test_rejects_invalid_filesystem(self, mock_client, mock_ssh):
         from proxmox_mcp.tools.disk import format_disk
 
@@ -373,7 +357,6 @@ class TestFormatDisk:
 
         assert result["status"] == "error"
 
-    @pytest.mark.asyncio
     async def test_rejects_injection_in_options(self, mock_client, mock_ssh):
         from proxmox_mcp.tools.disk import format_disk
 
@@ -398,7 +381,6 @@ class TestFormatDisk:
 
 
 class TestCreateMountPoint:
-    @pytest.mark.asyncio
     async def test_success(self, mock_client, mock_ssh):
         from proxmox_mcp.tools.disk import create_mount_point
 
@@ -428,7 +410,6 @@ class TestCreateMountPoint:
         assert result["mount_path"] == "/mnt/data"
         assert result["fstab_entry_added"] is True
 
-    @pytest.mark.asyncio
     async def test_rejects_invalid_mount_path(self, mock_client, mock_ssh):
         from proxmox_mcp.tools.disk import create_mount_point
 
@@ -440,7 +421,6 @@ class TestCreateMountPoint:
 
         assert result["status"] == "error"
 
-    @pytest.mark.asyncio
     async def test_rejects_path_traversal(self, mock_client, mock_ssh):
         from proxmox_mcp.tools.disk import create_mount_point
 
@@ -452,7 +432,6 @@ class TestCreateMountPoint:
 
         assert result["status"] == "error"
 
-    @pytest.mark.asyncio
     async def test_rejects_already_mounted(self, mock_client, mock_ssh):
         from proxmox_mcp.tools.disk import create_mount_point
 
@@ -475,7 +454,6 @@ class TestCreateMountPoint:
         assert result["status"] == "error"
         assert "already" in result["message"].lower()
 
-    @pytest.mark.asyncio
     async def test_fstab_rollback_on_validation_failure(self, mock_client, mock_ssh):
         from proxmox_mcp.tools.disk import create_mount_point
 
@@ -513,7 +491,6 @@ class TestCreateMountPoint:
 
 
 class TestUnmountPath:
-    @pytest.mark.asyncio
     async def test_success(self, mock_client, mock_ssh):
         from proxmox_mcp.tools.disk import unmount_path
 
@@ -531,7 +508,6 @@ class TestUnmountPath:
         assert result["status"] == "success"
         assert result["unmounted"] is True
 
-    @pytest.mark.asyncio
     async def test_rejects_not_mounted(self, mock_client, mock_ssh):
         from proxmox_mcp.tools.disk import unmount_path
 
@@ -546,7 +522,6 @@ class TestUnmountPath:
         assert result["status"] == "error"
         assert "not currently mounted" in result["message"].lower()
 
-    @pytest.mark.asyncio
     async def test_rejects_critical_path(self, mock_client, mock_ssh):
         from proxmox_mcp.tools.disk import unmount_path
 
@@ -565,7 +540,6 @@ class TestUnmountPath:
 
 
 class TestAddStorage:
-    @pytest.mark.asyncio
     async def test_add_dir_storage_success(self, mock_client):
         from proxmox_mcp.tools.storage import add_storage
 
@@ -588,7 +562,6 @@ class TestAddStorage:
         assert "images" in result["content"]
         assert "iso" in result["content"]
 
-    @pytest.mark.asyncio
     async def test_add_storage_duplicate_id(self, mock_client):
         from proxmox_mcp.tools.storage import add_storage
 
@@ -607,7 +580,6 @@ class TestAddStorage:
         assert result["status"] == "error"
         assert "already exists" in result["message"]
 
-    @pytest.mark.asyncio
     async def test_add_storage_invalid_type(self, mock_client):
         from proxmox_mcp.tools.storage import add_storage
 
@@ -621,7 +593,6 @@ class TestAddStorage:
         assert result["status"] == "error"
         assert "Invalid storage type" in result["message"]
 
-    @pytest.mark.asyncio
     async def test_add_storage_invalid_content(self, mock_client):
         from proxmox_mcp.tools.storage import add_storage
 
@@ -636,7 +607,6 @@ class TestAddStorage:
         assert result["status"] == "error"
         assert "Invalid content" in result["message"]
 
-    @pytest.mark.asyncio
     async def test_add_nfs_requires_server_and_export(self, mock_client):
         from proxmox_mcp.tools.storage import add_storage
 
@@ -652,7 +622,6 @@ class TestAddStorage:
         assert result["status"] == "error"
         assert "server" in result["message"].lower()
 
-    @pytest.mark.asyncio
     async def test_add_storage_dry_run(self, mock_client):
         from proxmox_mcp.tools.storage import add_storage
 
@@ -672,7 +641,6 @@ class TestAddStorage:
 
 
 class TestRemoveStorage:
-    @pytest.mark.asyncio
     async def test_requires_confirm(self, mock_client):
         from proxmox_mcp.tools.storage import remove_storage
 
@@ -681,7 +649,6 @@ class TestRemoveStorage:
 
         assert result["status"] == "confirmation_required"
 
-    @pytest.mark.asyncio
     async def test_rejects_default_storage(self, mock_client):
         from proxmox_mcp.tools.storage import remove_storage
 
@@ -691,7 +658,6 @@ class TestRemoveStorage:
         assert result["status"] == "error"
         assert "default" in result["message"].lower()
 
-    @pytest.mark.asyncio
     async def test_rejects_local_lvm(self, mock_client):
         from proxmox_mcp.tools.storage import remove_storage
 
@@ -700,7 +666,6 @@ class TestRemoveStorage:
 
         assert result["status"] == "error"
 
-    @pytest.mark.asyncio
     async def test_success(self, mock_client):
         from proxmox_mcp.tools.storage import remove_storage
 

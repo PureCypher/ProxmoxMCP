@@ -18,7 +18,6 @@ def mock_client():
 # --- cluster_status ---
 
 
-@pytest.mark.asyncio
 async def test_cluster_status(mock_client):
     from proxmox_mcp.resources.resources import cluster_status
 
@@ -30,7 +29,6 @@ async def test_cluster_status(mock_client):
     assert data[0]["type"] == "cluster"
 
 
-@pytest.mark.asyncio
 async def test_cluster_status_error(mock_client):
     from proxmox_mcp.resources.resources import cluster_status
 
@@ -44,7 +42,6 @@ async def test_cluster_status_error(mock_client):
 # --- cluster_resources ---
 
 
-@pytest.mark.asyncio
 async def test_cluster_resources(mock_client):
     from proxmox_mcp.resources.resources import cluster_resources
 
@@ -61,7 +58,6 @@ async def test_cluster_resources(mock_client):
 # --- nodes_list ---
 
 
-@pytest.mark.asyncio
 async def test_nodes_list(mock_client):
     from proxmox_mcp.resources.resources import nodes_list
 
@@ -77,7 +73,6 @@ async def test_nodes_list(mock_client):
 # --- node_status ---
 
 
-@pytest.mark.asyncio
 async def test_node_status(mock_client):
     from proxmox_mcp.resources.resources import node_status
 
@@ -90,7 +85,6 @@ async def test_node_status(mock_client):
     assert data["uptime"] == 86400
 
 
-@pytest.mark.asyncio
 async def test_node_status_error(mock_client):
     from proxmox_mcp.resources.resources import node_status
 
@@ -104,7 +98,6 @@ async def test_node_status_error(mock_client):
 # --- all_vms ---
 
 
-@pytest.mark.asyncio
 async def test_all_vms(mock_client):
     from proxmox_mcp.resources.resources import all_vms
 
@@ -150,7 +143,6 @@ async def test_all_vms(mock_client):
 # --- all_containers ---
 
 
-@pytest.mark.asyncio
 async def test_all_containers(mock_client):
     from proxmox_mcp.resources.resources import all_containers
 
@@ -196,7 +188,6 @@ async def test_all_containers(mock_client):
 # --- vm_detail ---
 
 
-@pytest.mark.asyncio
 async def test_vm_detail(mock_client):
     from proxmox_mcp.resources.resources import vm_detail
 
@@ -214,7 +205,6 @@ async def test_vm_detail(mock_client):
     assert data["node"] == "pve1"
 
 
-@pytest.mark.asyncio
 async def test_vm_detail_not_found(mock_client):
     from proxmox_mcp.resources.resources import vm_detail
 
@@ -228,7 +218,6 @@ async def test_vm_detail_not_found(mock_client):
 # --- container_detail ---
 
 
-@pytest.mark.asyncio
 async def test_container_detail(mock_client):
     from proxmox_mcp.resources.resources import container_detail
 
@@ -248,7 +237,6 @@ async def test_container_detail(mock_client):
 # --- storage_overview ---
 
 
-@pytest.mark.asyncio
 async def test_storage_overview(mock_client):
     from proxmox_mcp.resources.resources import storage_overview
 
@@ -268,7 +256,6 @@ async def test_storage_overview(mock_client):
 # --- recent_tasks ---
 
 
-@pytest.mark.asyncio
 async def test_recent_tasks(mock_client):
     from proxmox_mcp.resources.resources import recent_tasks
 
@@ -289,7 +276,6 @@ async def test_recent_tasks(mock_client):
     assert data[0]["starttime"] == 2000
 
 
-@pytest.mark.asyncio
 async def test_recent_tasks_error(mock_client):
     from proxmox_mcp.resources.resources import recent_tasks
 

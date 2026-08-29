@@ -17,7 +17,6 @@ def mock_client():
 # --- list_tasks ---
 
 
-@pytest.mark.asyncio
 async def test_list_tasks_single_node(mock_client):
     from proxmox_mcp.tools.task import list_tasks
 
@@ -46,7 +45,6 @@ async def test_list_tasks_single_node(mock_client):
     assert result["count"] == 2
 
 
-@pytest.mark.asyncio
 async def test_list_tasks_all_nodes(mock_client):
     from proxmox_mcp.tools.task import list_tasks
 
@@ -72,7 +70,6 @@ async def test_list_tasks_all_nodes(mock_client):
     assert result["count"] == 2
 
 
-@pytest.mark.asyncio
 async def test_list_tasks_with_status_filter_running(mock_client):
     from proxmox_mcp.tools.task import list_tasks
 
@@ -90,7 +87,6 @@ async def test_list_tasks_with_status_filter_running(mock_client):
     assert result["tasks"][0]["status"] == "running"
 
 
-@pytest.mark.asyncio
 async def test_list_tasks_with_status_filter_completed(mock_client):
     from proxmox_mcp.tools.task import list_tasks
 
@@ -107,7 +103,6 @@ async def test_list_tasks_with_status_filter_completed(mock_client):
     assert result["tasks"][0]["status"] == "OK"
 
 
-@pytest.mark.asyncio
 async def test_list_tasks_with_status_filter_error(mock_client):
     from proxmox_mcp.tools.task import list_tasks
 
@@ -125,7 +120,6 @@ async def test_list_tasks_with_status_filter_error(mock_client):
     assert result["tasks"][0]["status"] == "WARNINGS"
 
 
-@pytest.mark.asyncio
 async def test_list_tasks_error(mock_client):
     from proxmox_mcp.tools.task import list_tasks
 
@@ -140,7 +134,6 @@ async def test_list_tasks_error(mock_client):
 # --- get_task_status ---
 
 
-@pytest.mark.asyncio
 async def test_get_task_status(mock_client):
     from proxmox_mcp.tools.task import get_task_status
 
@@ -162,7 +155,6 @@ async def test_get_task_status(mock_client):
     mock_client.validate_node.assert_called_once_with("pve1")
 
 
-@pytest.mark.asyncio
 async def test_get_task_status_completed(mock_client):
     from proxmox_mcp.tools.task import get_task_status
 
@@ -180,7 +172,6 @@ async def test_get_task_status_completed(mock_client):
     assert result["task_status"]["exitstatus"] == "OK"
 
 
-@pytest.mark.asyncio
 async def test_get_task_status_error(mock_client):
     from proxmox_mcp.tools.task import get_task_status
 
@@ -195,7 +186,6 @@ async def test_get_task_status_error(mock_client):
 # --- get_task_log ---
 
 
-@pytest.mark.asyncio
 async def test_get_task_log(mock_client):
     from proxmox_mcp.tools.task import get_task_log
 
@@ -215,7 +205,6 @@ async def test_get_task_log(mock_client):
     assert result["log"][0]["t"] == "starting VM 100"
 
 
-@pytest.mark.asyncio
 async def test_get_task_log_empty(mock_client):
     from proxmox_mcp.tools.task import get_task_log
 
@@ -228,7 +217,6 @@ async def test_get_task_log_empty(mock_client):
     assert result["count"] == 0
 
 
-@pytest.mark.asyncio
 async def test_get_task_log_error(mock_client):
     from proxmox_mcp.tools.task import get_task_log
 
@@ -243,7 +231,6 @@ async def test_get_task_log_error(mock_client):
 # --- wait_for_task ---
 
 
-@pytest.mark.asyncio
 async def test_wait_for_task_immediate_complete(mock_client):
     from proxmox_mcp.tools.task import wait_for_task
 
@@ -261,7 +248,6 @@ async def test_wait_for_task_immediate_complete(mock_client):
     assert result["elapsed_seconds"] == 0
 
 
-@pytest.mark.asyncio
 async def test_wait_for_task_completes_after_polls(mock_client):
     from proxmox_mcp.tools.task import wait_for_task
 
@@ -298,7 +284,6 @@ async def test_wait_for_task_completes_after_polls(mock_client):
     assert result["elapsed_seconds"] == 4  # 2 polls * 2s interval
 
 
-@pytest.mark.asyncio
 async def test_wait_for_task_clamps_poll_interval_zero_and_short_timeout(mock_client):
     """poll_interval=0 and huge/small timeouts are clamped; no infinite spin."""
     from proxmox_mcp.tools.task import wait_for_task
@@ -316,7 +301,6 @@ async def test_wait_for_task_clamps_poll_interval_zero_and_short_timeout(mock_cl
     assert result["error_type"] == "TaskTimeoutError"
 
 
-@pytest.mark.asyncio
 async def test_wait_for_task_huge_timeout_clamped(mock_client):
     """timeout > 3600 is clamped to 3600 (wall-clock deadline, no drift)."""
     from proxmox_mcp.tools.task import wait_for_task
@@ -347,7 +331,6 @@ async def test_wait_for_task_huge_timeout_clamped(mock_client):
     assert "3600" in result["message"]
 
 
-@pytest.mark.asyncio
 async def test_wait_for_task_timeout(mock_client):
     from proxmox_mcp.tools.task import wait_for_task
 

@@ -19,7 +19,6 @@ def mock_client():
         yield client
 
 
-@pytest.mark.asyncio
 async def test_list_containers(mock_client):
     from proxmox_mcp.tools.container import list_containers
 
@@ -45,7 +44,6 @@ async def test_list_containers(mock_client):
     assert result["containers"][0]["type"] == "lxc"
 
 
-@pytest.mark.asyncio
 async def test_get_container_status(mock_client):
     from proxmox_mcp.tools.container import get_container_status
 
@@ -54,7 +52,6 @@ async def test_get_container_status(mock_client):
     assert result["status"] == "success"
 
 
-@pytest.mark.asyncio
 async def test_start_container(mock_client):
     from proxmox_mcp.tools.container import start_container
 
@@ -63,7 +60,6 @@ async def test_start_container(mock_client):
     assert result["status"] == "submitted"
 
 
-@pytest.mark.asyncio
 async def test_stop_container_protected(mock_client):
     from proxmox_mcp.tools.container import stop_container
     from proxmox_mcp.utils.errors import ProtectedResourceError
@@ -73,7 +69,6 @@ async def test_stop_container_protected(mock_client):
     assert result["status"] == "error"
 
 
-@pytest.mark.asyncio
 async def test_delete_container_requires_confirm(mock_client):
     from proxmox_mcp.tools.container import delete_container
 
@@ -84,7 +79,6 @@ async def test_delete_container_requires_confirm(mock_client):
     assert result["status"] == "confirmation_required"
 
 
-@pytest.mark.asyncio
 async def test_create_container(mock_client):
     from proxmox_mcp.tools.container import create_container
 
@@ -95,7 +89,6 @@ async def test_create_container(mock_client):
     assert result["status"] == "submitted"
 
 
-@pytest.mark.asyncio
 async def test_modify_container_config_blocks_hookscript(mock_client):
     from proxmox_mcp.tools.container import modify_container_config
 
@@ -106,7 +99,6 @@ async def test_modify_container_config_blocks_hookscript(mock_client):
     assert "hookscript" in result["message"]
 
 
-@pytest.mark.asyncio
 async def test_modify_container_config_allows_safe_keys(mock_client):
     from proxmox_mcp.tools.container import modify_container_config
 
@@ -120,7 +112,6 @@ async def test_modify_container_config_allows_safe_keys(mock_client):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_start_container_protected(mock_client):
     from proxmox_mcp.tools.container import start_container
 
@@ -135,7 +126,6 @@ async def test_start_container_protected(mock_client):
     c.check_protected.assert_called_once_with(999)
 
 
-@pytest.mark.asyncio
 async def test_start_container_protected_blocks(mock_client):
     from proxmox_mcp.tools.container import start_container
 
@@ -145,7 +135,6 @@ async def test_start_container_protected_blocks(mock_client):
     mock_client.api_call.assert_not_called()
 
 
-@pytest.mark.asyncio
 async def test_shutdown_container_no_dead_timeout_kwarg(mock_client):
     from proxmox_mcp.tools.container import shutdown_container
 
@@ -156,7 +145,6 @@ async def test_shutdown_container_no_dead_timeout_kwarg(mock_client):
     assert "timeout" not in kwargs
 
 
-@pytest.mark.asyncio
 async def test_create_container_rootfs_size_int(mock_client):
     from proxmox_mcp.tools.container import create_container
 

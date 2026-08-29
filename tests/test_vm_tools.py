@@ -19,7 +19,6 @@ def mock_client():
         yield client
 
 
-@pytest.mark.asyncio
 async def test_list_vms(mock_client):
     from proxmox_mcp.tools.vm import list_vms
 
@@ -46,7 +45,6 @@ async def test_list_vms(mock_client):
     assert result["vms"][0]["type"] == "qemu"
 
 
-@pytest.mark.asyncio
 async def test_list_vms_filter_running(mock_client):
     from proxmox_mcp.tools.vm import list_vms
 
@@ -82,7 +80,6 @@ async def test_list_vms_filter_running(mock_client):
     assert len(result["vms"]) == 1
 
 
-@pytest.mark.asyncio
 async def test_get_vm_status(mock_client):
     from proxmox_mcp.tools.vm import get_vm_status
 
@@ -101,7 +98,6 @@ async def test_get_vm_status(mock_client):
     assert result["status"] == "success"
 
 
-@pytest.mark.asyncio
 async def test_get_vm_status_auto_detect_node(mock_client):
     from proxmox_mcp.tools.vm import get_vm_status
 
@@ -110,7 +106,6 @@ async def test_get_vm_status_auto_detect_node(mock_client):
     mock_client.resolve_node.assert_called_once_with(100, None)
 
 
-@pytest.mark.asyncio
 async def test_get_vm_config(mock_client):
     from proxmox_mcp.tools.vm import get_vm_config
 
@@ -126,7 +121,6 @@ async def test_get_vm_config(mock_client):
     assert result["status"] == "success"
 
 
-@pytest.mark.asyncio
 async def test_get_vm_rrd_data(mock_client):
     from proxmox_mcp.tools.vm import get_vm_rrd_data
 
@@ -135,7 +129,6 @@ async def test_get_vm_rrd_data(mock_client):
     assert result["status"] == "success"
 
 
-@pytest.mark.asyncio
 async def test_start_vm(mock_client):
     from proxmox_mcp.tools.vm import start_vm
 
@@ -144,7 +137,6 @@ async def test_start_vm(mock_client):
     assert result["status"] == "submitted"
 
 
-@pytest.mark.asyncio
 async def test_stop_vm(mock_client):
     from proxmox_mcp.tools.vm import stop_vm
 
@@ -153,7 +145,6 @@ async def test_stop_vm(mock_client):
     assert result["status"] == "submitted"
 
 
-@pytest.mark.asyncio
 async def test_stop_vm_protected(mock_client):
     from proxmox_mcp.tools.vm import stop_vm
     from proxmox_mcp.utils.errors import ProtectedResourceError
@@ -163,7 +154,6 @@ async def test_stop_vm_protected(mock_client):
     assert result["status"] == "error"
 
 
-@pytest.mark.asyncio
 async def test_stop_vm_dry_run(mock_client):
     from proxmox_mcp.tools.vm import stop_vm
 
@@ -178,7 +168,6 @@ async def test_stop_vm_dry_run(mock_client):
     assert result["status"] == "dry_run"
 
 
-@pytest.mark.asyncio
 async def test_shutdown_vm(mock_client):
     from proxmox_mcp.tools.vm import shutdown_vm
 
@@ -187,7 +176,6 @@ async def test_shutdown_vm(mock_client):
     assert result["status"] == "submitted"
 
 
-@pytest.mark.asyncio
 async def test_delete_vm_requires_confirm(mock_client):
     from proxmox_mcp.tools.vm import delete_vm
 
@@ -198,7 +186,6 @@ async def test_delete_vm_requires_confirm(mock_client):
     assert result["status"] == "confirmation_required"
 
 
-@pytest.mark.asyncio
 async def test_delete_vm_confirmed(mock_client):
     from proxmox_mcp.tools.vm import delete_vm
 
@@ -207,7 +194,6 @@ async def test_delete_vm_confirmed(mock_client):
     assert result["status"] == "submitted"
 
 
-@pytest.mark.asyncio
 async def test_clone_vm(mock_client):
     from proxmox_mcp.tools.vm import clone_vm
 
@@ -216,7 +202,6 @@ async def test_clone_vm(mock_client):
     assert result["status"] == "submitted"
 
 
-@pytest.mark.asyncio
 async def test_create_vm(mock_client):
     from proxmox_mcp.tools.vm import create_vm
 
@@ -225,7 +210,6 @@ async def test_create_vm(mock_client):
     assert result["status"] == "submitted"
 
 
-@pytest.mark.asyncio
 async def test_modify_vm_config(mock_client):
     from proxmox_mcp.tools.vm import modify_vm_config
 
@@ -234,7 +218,6 @@ async def test_modify_vm_config(mock_client):
     assert result["status"] == "success"
 
 
-@pytest.mark.asyncio
 async def test_modify_vm_config_blocks_hookscript(mock_client):
     from proxmox_mcp.tools.vm import modify_vm_config
 
@@ -245,7 +228,6 @@ async def test_modify_vm_config_blocks_hookscript(mock_client):
     assert "hookscript" in result["message"]
 
 
-@pytest.mark.asyncio
 async def test_modify_vm_config_blocks_hostpci(mock_client):
     from proxmox_mcp.tools.vm import modify_vm_config
 
@@ -254,7 +236,6 @@ async def test_modify_vm_config_blocks_hostpci(mock_client):
     assert "hostpci0" in result["message"]
 
 
-@pytest.mark.asyncio
 async def test_modify_vm_config_allows_safe_keys(mock_client):
     from proxmox_mcp.tools.vm import modify_vm_config
 
@@ -267,7 +248,6 @@ async def test_modify_vm_config_allows_safe_keys(mock_client):
     assert "cores" in result["changes"]
 
 
-@pytest.mark.asyncio
 async def test_modify_vm_config_blocks_unknown_key(mock_client):
     from proxmox_mcp.tools.vm import modify_vm_config
 
@@ -276,7 +256,6 @@ async def test_modify_vm_config_blocks_unknown_key(mock_client):
     assert "some_unknown_key" in result["message"]
 
 
-@pytest.mark.asyncio
 async def test_resize_vm_disk(mock_client):
     from proxmox_mcp.tools.vm import resize_vm_disk
 
@@ -287,7 +266,6 @@ async def test_resize_vm_disk(mock_client):
     assert result["size"] == "+10G"
 
 
-@pytest.mark.asyncio
 async def test_resize_vm_disk_protected(mock_client):
     from proxmox_mcp.tools.vm import resize_vm_disk
     from proxmox_mcp.utils.errors import ProtectedResourceError
@@ -297,7 +275,6 @@ async def test_resize_vm_disk_protected(mock_client):
     assert result["status"] == "error"
 
 
-@pytest.mark.asyncio
 async def test_resize_vm_disk_dry_run(mock_client):
     from proxmox_mcp.tools.vm import resize_vm_disk
 
@@ -307,7 +284,6 @@ async def test_resize_vm_disk_dry_run(mock_client):
     assert result["status"] == "dry_run"
 
 
-@pytest.mark.asyncio
 async def test_convert_vm_to_template_requires_confirm(mock_client):
     from proxmox_mcp.tools.vm import convert_vm_to_template
 
@@ -315,7 +291,6 @@ async def test_convert_vm_to_template_requires_confirm(mock_client):
     assert result["status"] == "confirmation_required"
 
 
-@pytest.mark.asyncio
 async def test_convert_vm_to_template_confirmed(mock_client):
     from proxmox_mcp.tools.vm import convert_vm_to_template
 
@@ -325,7 +300,6 @@ async def test_convert_vm_to_template_confirmed(mock_client):
     assert "template" in result["message"]
 
 
-@pytest.mark.asyncio
 async def test_convert_vm_to_template_protected(mock_client):
     from proxmox_mcp.tools.vm import convert_vm_to_template
     from proxmox_mcp.utils.errors import ProtectedResourceError
@@ -335,7 +309,6 @@ async def test_convert_vm_to_template_protected(mock_client):
     assert result["status"] == "error"
 
 
-@pytest.mark.asyncio
 async def test_start_vm_protected(mock_client):
     from proxmox_mcp.tools.vm import start_vm
     from proxmox_mcp.utils.errors import ProtectedResourceError
@@ -345,7 +318,6 @@ async def test_start_vm_protected(mock_client):
     assert result["status"] == "error"
 
 
-@pytest.mark.asyncio
 async def test_set_vm_cloudinit(mock_client):
     from proxmox_mcp.tools.vm import set_vm_cloudinit
 
@@ -356,7 +328,6 @@ async def test_set_vm_cloudinit(mock_client):
     assert "ipconfig0" in result["changes"]
 
 
-@pytest.mark.asyncio
 async def test_set_vm_cloudinit_no_changes(mock_client):
     from proxmox_mcp.tools.vm import set_vm_cloudinit
 
@@ -364,7 +335,6 @@ async def test_set_vm_cloudinit_no_changes(mock_client):
     assert result["status"] == "error"
 
 
-@pytest.mark.asyncio
 async def test_set_vm_cloudinit_dry_run(mock_client):
     from proxmox_mcp.tools.vm import set_vm_cloudinit
 
@@ -374,7 +344,6 @@ async def test_set_vm_cloudinit_dry_run(mock_client):
     assert result["status"] == "dry_run"
 
 
-@pytest.mark.asyncio
 async def test_regenerate_cloudinit_image(mock_client):
     from proxmox_mcp.tools.vm import regenerate_cloudinit_image
 
@@ -384,7 +353,6 @@ async def test_regenerate_cloudinit_image(mock_client):
     assert "regenerated" in result["message"]
 
 
-@pytest.mark.asyncio
 async def test_regenerate_cloudinit_image_protected(mock_client):
     from proxmox_mcp.tools.vm import regenerate_cloudinit_image
     from proxmox_mcp.utils.errors import ProtectedResourceError
@@ -399,7 +367,6 @@ async def test_regenerate_cloudinit_image_protected(mock_client):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_start_vm_timeout_forwarded(mock_client):
     from proxmox_mcp.tools.vm import start_vm
 
@@ -410,7 +377,6 @@ async def test_start_vm_timeout_forwarded(mock_client):
     assert kwargs.get("timeout") == 45
 
 
-@pytest.mark.asyncio
 async def test_shutdown_vm_no_dead_timeout_kwarg(mock_client):
     from proxmox_mcp.tools.vm import shutdown_vm
 
@@ -421,7 +387,6 @@ async def test_shutdown_vm_no_dead_timeout_kwarg(mock_client):
     assert "timeout" not in kwargs
 
 
-@pytest.mark.asyncio
 async def test_modify_vm_config_int_kwargs(mock_client):
     from proxmox_mcp.tools.vm import modify_vm_config
 
@@ -435,7 +400,6 @@ async def test_modify_vm_config_int_kwargs(mock_client):
     assert kwargs["balloon"] == 2048 and isinstance(kwargs["balloon"], int)
 
 
-@pytest.mark.asyncio
 async def test_modify_vm_config_long_value_rejected(mock_client):
     from proxmox_mcp.tools.vm import modify_vm_config
 
@@ -446,7 +410,6 @@ async def test_modify_vm_config_long_value_rejected(mock_client):
     mock_client.api_call.assert_not_called()
 
 
-@pytest.mark.asyncio
 async def test_list_vms_invalid_status_filter(mock_client):
     from proxmox_mcp.tools.vm import list_vms
 
@@ -457,7 +420,6 @@ async def test_list_vms_invalid_status_filter(mock_client):
     mock_client.api_call.assert_not_called()
 
 
-@pytest.mark.asyncio
 async def test_get_vm_rrd_data_invalid_timeframe(mock_client):
     from proxmox_mcp.tools.vm import get_vm_rrd_data
 
@@ -468,7 +430,6 @@ async def test_get_vm_rrd_data_invalid_timeframe(mock_client):
     mock_client.api_call.assert_not_called()
 
 
-@pytest.mark.asyncio
 async def test_list_vms_empty_not_silent(mock_client):
     """Unknown status_filter must error, and a valid filter on empty result succeeds."""
     from proxmox_mcp.tools.vm import list_vms

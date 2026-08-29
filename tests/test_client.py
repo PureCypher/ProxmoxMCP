@@ -30,7 +30,6 @@ def client(mock_config):
         return c
 
 
-@pytest.mark.asyncio
 async def test_resolve_node_for_vmid(client):
     client._api.cluster.resources.get.return_value = [
         {"vmid": 100, "node": "pve1", "type": "qemu"},
@@ -40,7 +39,6 @@ async def test_resolve_node_for_vmid(client):
     assert node == "pve1"
 
 
-@pytest.mark.asyncio
 async def test_resolve_node_for_vmid_not_found(client):
     client._api.cluster.resources.get.return_value = []
     with pytest.raises(VMNotFoundError):
@@ -90,13 +88,11 @@ def test_dry_run_response_with_action_param(client):
     assert result["params"]["action"] == "ACCEPT"
 
 
-@pytest.mark.asyncio
 async def test_resolve_node_with_explicit_node(client):
     node = await client.resolve_node(100, "pve1")
     assert node == "pve1"
 
 
-@pytest.mark.asyncio
 async def test_resolve_node_auto_detect(client):
     client._api.cluster.resources.get.return_value = [
         {"vmid": 100, "node": "pve2", "type": "qemu"},
@@ -105,13 +101,11 @@ async def test_resolve_node_auto_detect(client):
     assert node == "pve2"
 
 
-@pytest.mark.asyncio
 async def test_resolve_node_invalid_name(client):
     with pytest.raises(InvalidParameterError):
         await client.resolve_node(100, "bad node!")
 
 
-@pytest.mark.asyncio
 async def test_resolve_node_disallowed_node(mock_config, monkeypatch):
     monkeypatch.setenv("PROXMOX_ALLOWED_NODES", "pve1,pve2")
     config = ProxmoxConfig()
@@ -121,7 +115,6 @@ async def test_resolve_node_disallowed_node(mock_config, monkeypatch):
             await c.resolve_node(100, "pve3")
 
 
-@pytest.mark.asyncio
 async def test_client_init_token_auth(mock_config):
     with patch("proxmox_mcp.client.ProxmoxAPI") as mock_cls:
         ProxmoxClient(mock_config)
@@ -141,7 +134,6 @@ def _api_error(status_code: int):
     return ResourceException(status_code, "err", "body detail with host pve1.example.com")
 
 
-@pytest.mark.asyncio
 async def test_api_call_401_maps_to_authentication_error(client):
     from proxmox_mcp.utils.errors import AuthenticationError
 
@@ -152,7 +144,6 @@ async def test_api_call_401_maps_to_authentication_error(client):
     assert "pve1.example.com" not in str(exc.value)
 
 
-@pytest.mark.asyncio
 async def test_api_call_403_maps_to_insufficient_permissions(client):
     from proxmox_mcp.utils.errors import InsufficientPermissionsError
 
@@ -161,7 +152,6 @@ async def test_api_call_403_maps_to_insufficient_permissions(client):
         await client.api_call(client._api.version.get)
 
 
-@pytest.mark.asyncio
 async def test_api_call_500_maps_to_proxmox_mcp_error(client):
     from proxmox_mcp.utils.errors import ProxmoxMCPError
 
@@ -172,7 +162,6 @@ async def test_api_call_500_maps_to_proxmox_mcp_error(client):
     assert "pve1.example.com" not in str(exc.value)
 
 
-@pytest.mark.asyncio
 async def test_api_call_network_error_maps_to_connection_error(client):
     import requests.exceptions
 
@@ -183,7 +172,6 @@ async def test_api_call_network_error_maps_to_connection_error(client):
         await client.api_call(client._api.version.get)
 
 
-@pytest.mark.asyncio
 async def test_api_call_timeout_maps_to_connection_error(client):
     from proxmox_mcp.utils.errors import ProxmoxConnectionError
 
@@ -195,7 +183,6 @@ async def test_api_call_timeout_maps_to_connection_error(client):
 # --- node resolution cache ---
 
 
-@pytest.mark.asyncio
 async def test_resolve_node_for_vmid_uses_cache_within_ttl(client):
     client._api.cluster.resources.get.return_value = [
         {"vmid": 100, "node": "pve1", "type": "qemu"},
@@ -207,7 +194,6 @@ async def test_resolve_node_for_vmid_uses_cache_within_ttl(client):
     assert client._api.cluster.resources.get.call_count == 1
 
 
-@pytest.mark.asyncio
 async def test_resolve_node_for_vmid_cache_expires(client):
     client._api.cluster.resources.get.return_value = [
         {"vmid": 100, "node": "pve1", "type": "qemu"},
@@ -232,3 +218,15 @@ def test_token_without_bang_requires_proxmox_user(mock_config, monkeypatch):
     with pytest.raises(AuthenticationError) as exc:
         ProxmoxClient(config)
     assert "PROXMOX_USER must be set" in str(exc.value)
+
+
+async def test_resolve_node_for_vmid_finds_lxc_container(client):
+    """A container-only resource (type=lxc, no type filter) must resolve its node."""
+    client._api.cluster.resources.get.return_value = [
+        {"vmid": 101, "node": "pve1", "type": "lxc"},
+    ]
+    node = await client.resolve_node_for_vmid(101)
+    assert node == "pve1"
+    # no type filter may be passed — that would hide containers
+    _, kwargs = client._api.cluster.resources.get.call_args
+    assert "type" not in kwargs

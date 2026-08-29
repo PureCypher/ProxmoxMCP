@@ -112,7 +112,6 @@ class TestSSHExecutor:
         with pytest.raises(SSHExecutionError, match="SSH key not found"):
             executor._execute_sync("192.168.1.100", "echo hello")
 
-    @pytest.mark.asyncio
     @patch("proxmox_mcp.ssh.paramiko.SSHClient")
     async def test_execute_async(self, mock_ssh_class, mock_config):
         mock_client = MagicMock()

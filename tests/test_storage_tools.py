@@ -17,7 +17,6 @@ def mock_client():
 # --- list_storage ---
 
 
-@pytest.mark.asyncio
 async def test_list_storage(mock_client):
     from proxmox_mcp.tools.storage import list_storage
 
@@ -51,7 +50,6 @@ async def test_list_storage(mock_client):
     assert result["storage"][2]["shared"] == 1
 
 
-@pytest.mark.asyncio
 async def test_list_storage_empty(mock_client):
     from proxmox_mcp.tools.storage import list_storage
 
@@ -64,7 +62,6 @@ async def test_list_storage_empty(mock_client):
     assert result["count"] == 0
 
 
-@pytest.mark.asyncio
 async def test_list_storage_error(mock_client):
     from proxmox_mcp.tools.storage import list_storage
 
@@ -79,7 +76,6 @@ async def test_list_storage_error(mock_client):
 # --- get_storage_status ---
 
 
-@pytest.mark.asyncio
 async def test_get_storage_status(mock_client):
     from proxmox_mcp.tools.storage import get_storage_status
 
@@ -103,7 +99,6 @@ async def test_get_storage_status(mock_client):
     mock_client.validate_node.assert_called_once_with("pve1")
 
 
-@pytest.mark.asyncio
 async def test_get_storage_status_error(mock_client):
     from proxmox_mcp.tools.storage import get_storage_status
 
@@ -119,7 +114,6 @@ async def test_get_storage_status_error(mock_client):
 # --- list_storage_content ---
 
 
-@pytest.mark.asyncio
 async def test_list_storage_content(mock_client):
     from proxmox_mcp.tools.storage import list_storage_content
 
@@ -144,7 +138,6 @@ async def test_list_storage_content(mock_client):
     assert result["count"] == 2
 
 
-@pytest.mark.asyncio
 async def test_list_storage_content_filtered(mock_client):
     from proxmox_mcp.tools.storage import list_storage_content
 
@@ -164,7 +157,6 @@ async def test_list_storage_content_filtered(mock_client):
     assert result["count"] == 1
 
 
-@pytest.mark.asyncio
 async def test_list_storage_content_error(mock_client):
     from proxmox_mcp.tools.storage import list_storage_content
 
@@ -179,7 +171,6 @@ async def test_list_storage_content_error(mock_client):
 # --- get_available_isos ---
 
 
-@pytest.mark.asyncio
 async def test_get_available_isos(mock_client):
     from proxmox_mcp.tools.storage import get_available_isos
 
@@ -196,7 +187,6 @@ async def test_get_available_isos(mock_client):
     assert len(result["isos"]) == 1
 
 
-@pytest.mark.asyncio
 async def test_get_available_isos_custom_storage(mock_client):
     from proxmox_mcp.tools.storage import get_available_isos
 
@@ -213,7 +203,6 @@ async def test_get_available_isos_custom_storage(mock_client):
 # --- get_available_templates ---
 
 
-@pytest.mark.asyncio
 async def test_get_available_templates(mock_client):
     from proxmox_mcp.tools.storage import get_available_templates
 
@@ -239,7 +228,6 @@ async def test_get_available_templates(mock_client):
     assert len(result["templates"]) == 2
 
 
-@pytest.mark.asyncio
 async def test_get_available_templates_error(mock_client):
     from proxmox_mcp.tools.storage import get_available_templates
 
@@ -254,7 +242,6 @@ async def test_get_available_templates_error(mock_client):
 # --- download_to_storage ---
 
 
-@pytest.mark.asyncio
 async def test_download_to_storage(mock_client):
     from proxmox_mcp.tools.storage import download_to_storage
 
@@ -273,7 +260,6 @@ async def test_download_to_storage(mock_client):
     assert result["status"] == "submitted"
 
 
-@pytest.mark.asyncio
 async def test_download_to_storage_invalid_content(mock_client):
     from proxmox_mcp.tools.storage import download_to_storage
 
@@ -290,7 +276,6 @@ async def test_download_to_storage_invalid_content(mock_client):
     assert "iso" in result["message"]
 
 
-@pytest.mark.asyncio
 async def test_download_to_storage_dry_run(mock_client):
     from proxmox_mcp.tools.storage import download_to_storage
 
@@ -314,7 +299,6 @@ async def test_download_to_storage_dry_run(mock_client):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_download_to_storage_rejects_bad_scheme(mock_client):
     from proxmox_mcp.tools.storage import download_to_storage
 
@@ -331,7 +315,6 @@ async def test_download_to_storage_rejects_bad_scheme(mock_client):
     mock_client.api_call.assert_not_called()
 
 
-@pytest.mark.asyncio
 async def test_download_to_storage_rejects_loopback(mock_client):
     from proxmox_mcp.tools.storage import download_to_storage
 
@@ -362,7 +345,6 @@ async def test_download_to_storage_rejects_loopback(mock_client):
     assert result["status"] == "error"
 
 
-@pytest.mark.asyncio
 async def test_download_to_storage_rejects_local_domain(mock_client):
     from proxmox_mcp.tools.storage import download_to_storage
 
@@ -378,7 +360,6 @@ async def test_download_to_storage_rejects_local_domain(mock_client):
     assert result["error_type"] == "InvalidParameterError"
 
 
-@pytest.mark.asyncio
 async def test_download_to_storage_accepts_https(mock_client):
     from proxmox_mcp.tools.storage import download_to_storage
 

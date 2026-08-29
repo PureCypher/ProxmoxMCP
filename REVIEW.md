@@ -141,8 +141,8 @@ Batching note: the harness caps concurrent swarm agents at 3, so Phase 1 ran as 
 1. **mcp 1.26.0 → 2.x migration plan** — breaking API change; ~half day of review + tests. (effort: M)
 2. **SSH client cache eviction policy hardening / per-purpose thread pool for to_thread calls** — bounded 8-entry LRU added; a dedicated ThreadPoolExecutor for SSH vs API is still worth doing. (effort: S–M)
 3. **Central `context` module replacing the 11 copy-pasted get_client/get_mcp + tool_guard decorator + per-step disk coroutines** — the duplication is now only cosmetic (lazy accessors); a decorator refactor would shrink ~75 try/except shells. (effort: M, churn risk)
-4. **Dead exception classes still unused (ContainerNotFoundError, NodeNotFoundError) + `resolve_node_for_id` for LXC (client hardcodes type="vm")** — LXC ID lookups would currently 404 as VMs. (effort: S, latent bug for LXC-only flows that auto-resolve nodes)
-5. **~80 redundant `@pytest.mark.asyncio` markers (170 warnings)** — cosmetic. (effort: S)
+4. ~~Dead exception classes + `resolve_node_for_id` for LXC (client hardcoded `type="vm"`).~~ **DONE (follow-through):** `_query_node_for_vmid` now queries without the type filter, so LXC IDs resolve; error message reports the count; regression test `test_resolve_node_for_vmid_finds_lxc_container`. (ContainerNotFoundError/NodeNotFoundError still unused — cosmetic, left as-is.)
+5. ~~~80 redundant `@pytest.mark.asyncio` markers (170 warnings).~~ **DONE (follow-through):** all 276 redundant markers removed (pytest-asyncio auto mode is configured); warnings eliminated.
 6. **mcp 2.x / paramiko 5.x watch; dynamic version from git tags.** (effort: S)
 7. **pytest tmpdir + a handful of transitive advisories from `uv audit` graph** — nothing affects our locked direct deps; re-run on each lock refresh (now a CI job). (effort: trivial, automated)
 8. **`create_backup_job.vmid` comma-str vs int convention, `partition_disk.confirm_destructive` naming (renaming is breaking, kept)** — doc-only. (effort: S)

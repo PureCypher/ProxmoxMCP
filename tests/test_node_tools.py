@@ -19,7 +19,6 @@ def mock_client():
 # --- list_nodes ---
 
 
-@pytest.mark.asyncio
 async def test_list_nodes(mock_client):
     from proxmox_mcp.tools.node import list_nodes
 
@@ -60,7 +59,6 @@ async def test_list_nodes(mock_client):
     assert "1d" in result["nodes"][0]["uptime"]
 
 
-@pytest.mark.asyncio
 async def test_list_nodes_empty(mock_client):
     from proxmox_mcp.tools.node import list_nodes
 
@@ -73,7 +71,6 @@ async def test_list_nodes_empty(mock_client):
     assert result["count"] == 0
 
 
-@pytest.mark.asyncio
 async def test_list_nodes_error(mock_client):
     from proxmox_mcp.tools.node import list_nodes
 
@@ -89,7 +86,6 @@ async def test_list_nodes_error(mock_client):
 # --- get_node_status ---
 
 
-@pytest.mark.asyncio
 async def test_get_node_status(mock_client):
     from proxmox_mcp.tools.node import get_node_status
 
@@ -110,7 +106,6 @@ async def test_get_node_status(mock_client):
     mock_client.validate_node.assert_called_once_with("pve1")
 
 
-@pytest.mark.asyncio
 async def test_get_node_status_not_allowed(mock_client):
     from proxmox_mcp.tools.node import get_node_status
 
@@ -126,7 +121,6 @@ async def test_get_node_status_not_allowed(mock_client):
     assert "pve3" in result["message"]
 
 
-@pytest.mark.asyncio
 async def test_get_node_status_invalid_name():
     from proxmox_mcp.tools.node import get_node_status
 
@@ -139,7 +133,6 @@ async def test_get_node_status_invalid_name():
 # --- get_node_services ---
 
 
-@pytest.mark.asyncio
 async def test_get_node_services(mock_client):
     from proxmox_mcp.tools.node import get_node_services
 
@@ -159,7 +152,6 @@ async def test_get_node_services(mock_client):
 # --- get_node_network ---
 
 
-@pytest.mark.asyncio
 async def test_get_node_network(mock_client):
     from proxmox_mcp.tools.node import get_node_network
 
@@ -179,7 +171,6 @@ async def test_get_node_network(mock_client):
 # --- get_node_storage ---
 
 
-@pytest.mark.asyncio
 async def test_get_node_storage(mock_client):
     from proxmox_mcp.tools.node import get_node_storage
 
@@ -199,7 +190,6 @@ async def test_get_node_storage(mock_client):
 # --- get_node_syslog ---
 
 
-@pytest.mark.asyncio
 async def test_get_node_syslog(mock_client):
     from proxmox_mcp.tools.node import get_node_syslog
 
@@ -216,7 +206,6 @@ async def test_get_node_syslog(mock_client):
     assert result["node"] == "pve1"
 
 
-@pytest.mark.asyncio
 async def test_get_node_syslog_with_since(mock_client):
     from proxmox_mcp.tools.node import get_node_syslog
 
@@ -231,7 +220,6 @@ async def test_get_node_syslog_with_since(mock_client):
     assert result["count"] == 1
 
 
-@pytest.mark.asyncio
 async def test_get_node_syslog_since_int(mock_client):
     from proxmox_mcp.tools.node import get_node_syslog
 
@@ -246,7 +234,6 @@ async def test_get_node_syslog_since_int(mock_client):
     )
 
 
-@pytest.mark.asyncio
 async def test_get_node_syslog_since_date_string_rejected(mock_client):
     from proxmox_mcp.tools.node import get_node_syslog
 
@@ -259,7 +246,6 @@ async def test_get_node_syslog_since_date_string_rejected(mock_client):
     mock_client.api_call.assert_not_called()
 
 
-@pytest.mark.asyncio
 async def test_get_node_syslog_limit_clamped(mock_client):
     from proxmox_mcp.tools.node import get_node_syslog
 
@@ -277,7 +263,6 @@ async def test_get_node_syslog_limit_clamped(mock_client):
 # --- reboot_node ---
 
 
-@pytest.mark.asyncio
 async def test_reboot_node_requires_confirm(mock_client):
     from proxmox_mcp.tools.node import reboot_node
 
@@ -288,7 +273,6 @@ async def test_reboot_node_requires_confirm(mock_client):
     assert "REBOOT" in result["warning"]
 
 
-@pytest.mark.asyncio
 async def test_reboot_node_confirmed(mock_client):
     from proxmox_mcp.tools.node import reboot_node
 
@@ -301,7 +285,6 @@ async def test_reboot_node_confirmed(mock_client):
     assert result["status"] == "submitted"
 
 
-@pytest.mark.asyncio
 async def test_reboot_node_dry_run(mock_client):
     from proxmox_mcp.tools.node import reboot_node
 
@@ -317,7 +300,6 @@ async def test_reboot_node_dry_run(mock_client):
 # --- shutdown_node ---
 
 
-@pytest.mark.asyncio
 async def test_shutdown_node_requires_confirm(mock_client):
     from proxmox_mcp.tools.node import shutdown_node
 
@@ -328,7 +310,6 @@ async def test_shutdown_node_requires_confirm(mock_client):
     assert "SHUT DOWN" in result["warning"]
 
 
-@pytest.mark.asyncio
 async def test_shutdown_node_confirmed(mock_client):
     from proxmox_mcp.tools.node import shutdown_node
 
@@ -341,7 +322,6 @@ async def test_shutdown_node_confirmed(mock_client):
     assert result["status"] == "submitted"
 
 
-@pytest.mark.asyncio
 async def test_shutdown_node_not_allowed(mock_client):
     from proxmox_mcp.tools.node import shutdown_node
 

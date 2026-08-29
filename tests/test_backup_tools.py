@@ -18,7 +18,6 @@ def mock_client():
         yield client
 
 
-@pytest.mark.asyncio
 async def test_create_snapshot(mock_client):
     from proxmox_mcp.tools.backup import create_snapshot
 
@@ -27,7 +26,6 @@ async def test_create_snapshot(mock_client):
     assert result["status"] == "submitted"
 
 
-@pytest.mark.asyncio
 async def test_list_snapshots(mock_client):
     from proxmox_mcp.tools.backup import list_snapshots
 
@@ -40,7 +38,6 @@ async def test_list_snapshots(mock_client):
     assert result["status"] == "success"
 
 
-@pytest.mark.asyncio
 async def test_rollback_snapshot_requires_confirm(mock_client):
     from proxmox_mcp.tools.backup import rollback_snapshot
 
@@ -48,7 +45,6 @@ async def test_rollback_snapshot_requires_confirm(mock_client):
     assert result["status"] == "confirmation_required"
 
 
-@pytest.mark.asyncio
 async def test_create_backup(mock_client):
     from proxmox_mcp.tools.backup import create_backup
 
@@ -57,7 +53,6 @@ async def test_create_backup(mock_client):
     assert result["status"] == "submitted"
 
 
-@pytest.mark.asyncio
 async def test_list_backups(mock_client):
     from proxmox_mcp.tools.backup import list_backups
 
@@ -73,7 +68,6 @@ async def test_list_backups(mock_client):
 # --- list_backup_jobs ---
 
 
-@pytest.mark.asyncio
 async def test_list_backup_jobs(mock_client):
     from proxmox_mcp.tools.backup import list_backup_jobs
 
@@ -90,7 +84,6 @@ async def test_list_backup_jobs(mock_client):
 # --- create_backup_job ---
 
 
-@pytest.mark.asyncio
 async def test_create_backup_job(mock_client):
     from proxmox_mcp.tools.backup import create_backup_job
 
@@ -100,7 +93,6 @@ async def test_create_backup_job(mock_client):
     assert result["schedule"] == "daily"
 
 
-@pytest.mark.asyncio
 async def test_create_backup_job_dry_run(mock_client):
     from proxmox_mcp.tools.backup import create_backup_job
 
@@ -113,7 +105,6 @@ async def test_create_backup_job_dry_run(mock_client):
 # --- delete_backup_job ---
 
 
-@pytest.mark.asyncio
 async def test_delete_backup_job_requires_confirm(mock_client):
     from proxmox_mcp.tools.backup import delete_backup_job
 
@@ -121,7 +112,6 @@ async def test_delete_backup_job_requires_confirm(mock_client):
     assert result["status"] == "confirmation_required"
 
 
-@pytest.mark.asyncio
 async def test_delete_backup_job_confirmed(mock_client):
     from proxmox_mcp.tools.backup import delete_backup_job
 
@@ -136,7 +126,6 @@ async def test_delete_backup_job_confirmed(mock_client):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_create_backup_job_invalid_cron_schedule(mock_client):
     from proxmox_mcp.tools.backup import create_backup_job
 
@@ -147,7 +136,6 @@ async def test_create_backup_job_invalid_cron_schedule(mock_client):
     mock_client.api_call.assert_not_called()
 
 
-@pytest.mark.asyncio
 async def test_create_backup_job_valid_schedules(mock_client):
     from proxmox_mcp.tools.backup import create_backup_job
 
@@ -158,7 +146,6 @@ async def test_create_backup_job_valid_schedules(mock_client):
         assert result["status"] == "success", sched
 
 
-@pytest.mark.asyncio
 async def test_create_backup_job_bad_at_time(mock_client):
     from proxmox_mcp.tools.backup import create_backup_job
 

@@ -2,8 +2,6 @@
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 
 def _client(module: str, api_error: Exception) -> MagicMock:
     with patch(f"{module}.get_client") as mock_get:
@@ -23,7 +21,6 @@ async def _expect_error(result: dict) -> None:
     assert "message" in result
 
 
-@pytest.mark.asyncio
 async def test_get_vm_status_api_error():
     from proxmox_mcp.tools.vm import get_vm_status
 
@@ -33,7 +30,6 @@ async def test_get_vm_status_api_error():
     assert "Use list_vms" in result.get("suggestion", "")
 
 
-@pytest.mark.asyncio
 async def test_reboot_vm_api_error():
     from proxmox_mcp.tools.vm import reboot_vm
 
@@ -42,7 +38,6 @@ async def test_reboot_vm_api_error():
     await _expect_error(result)
 
 
-@pytest.mark.asyncio
 async def test_suspend_resume_reset_vm_api_error():
     from proxmox_mcp.tools.vm import reset_vm, resume_vm, suspend_vm
 
@@ -52,7 +47,6 @@ async def test_suspend_resume_reset_vm_api_error():
         await _expect_error(result)
 
 
-@pytest.mark.asyncio
 async def test_get_container_config_api_error():
     from proxmox_mcp.tools.container import get_container_config
 
@@ -61,7 +55,6 @@ async def test_get_container_config_api_error():
     await _expect_error(result)
 
 
-@pytest.mark.asyncio
 async def test_shutdown_container_api_error():
     from proxmox_mcp.tools.container import shutdown_container
 
@@ -70,7 +63,6 @@ async def test_shutdown_container_api_error():
     await _expect_error(result)
 
 
-@pytest.mark.asyncio
 async def test_delete_container_api_error():
     from proxmox_mcp.tools.container import delete_container
 
@@ -79,7 +71,6 @@ async def test_delete_container_api_error():
     await _expect_error(result)
 
 
-@pytest.mark.asyncio
 async def test_create_snapshot_api_error():
     from proxmox_mcp.tools.backup import create_snapshot
 
@@ -88,7 +79,6 @@ async def test_create_snapshot_api_error():
     await _expect_error(result)
 
 
-@pytest.mark.asyncio
 async def test_get_node_firewall_rules_api_error():
     from proxmox_mcp.tools.network import get_node_firewall_rules
 
@@ -97,7 +87,6 @@ async def test_get_node_firewall_rules_api_error():
     await _expect_error(result)
 
 
-@pytest.mark.asyncio
 async def test_container_happy_paths():
     """Happy-path coverage: config, reboot, clone, migrate, delete."""
     from proxmox_mcp.tools.container import (

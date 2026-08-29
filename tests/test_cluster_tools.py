@@ -16,7 +16,6 @@ def mock_client():
 # --- get_cluster_status ---
 
 
-@pytest.mark.asyncio
 async def test_get_cluster_status(mock_client):
     from proxmox_mcp.tools.cluster import get_cluster_status
 
@@ -59,7 +58,6 @@ async def test_get_cluster_status(mock_client):
     assert result["nodes"][1]["name"] == "pve2"
 
 
-@pytest.mark.asyncio
 async def test_get_cluster_status_error(mock_client):
     from proxmox_mcp.tools.cluster import get_cluster_status
 
@@ -75,7 +73,6 @@ async def test_get_cluster_status_error(mock_client):
 # --- get_cluster_resources ---
 
 
-@pytest.mark.asyncio
 async def test_get_cluster_resources_all(mock_client):
     from proxmox_mcp.tools.cluster import get_cluster_resources
 
@@ -92,7 +89,6 @@ async def test_get_cluster_resources_all(mock_client):
     assert result["count"] == 2
 
 
-@pytest.mark.asyncio
 async def test_get_cluster_resources_filtered(mock_client):
     from proxmox_mcp.tools.cluster import get_cluster_resources
 
@@ -108,7 +104,6 @@ async def test_get_cluster_resources_filtered(mock_client):
     assert result["count"] == 1
 
 
-@pytest.mark.asyncio
 async def test_get_cluster_resources_error(mock_client):
     from proxmox_mcp.tools.cluster import get_cluster_resources
 
@@ -123,7 +118,6 @@ async def test_get_cluster_resources_error(mock_client):
 # --- get_cluster_log ---
 
 
-@pytest.mark.asyncio
 async def test_get_cluster_log(mock_client):
     from proxmox_mcp.tools.cluster import get_cluster_log
 
@@ -140,7 +134,6 @@ async def test_get_cluster_log(mock_client):
     assert len(result["entries"]) == 2
 
 
-@pytest.mark.asyncio
 async def test_get_cluster_log_error(mock_client):
     from proxmox_mcp.tools.cluster import get_cluster_log
 
@@ -155,7 +148,6 @@ async def test_get_cluster_log_error(mock_client):
 # --- get_next_vmid ---
 
 
-@pytest.mark.asyncio
 async def test_get_next_vmid(mock_client):
     from proxmox_mcp.tools.cluster import get_next_vmid
 
@@ -169,7 +161,6 @@ async def test_get_next_vmid(mock_client):
     assert isinstance(result["vmid"], int)
 
 
-@pytest.mark.asyncio
 async def test_get_next_vmid_error(mock_client):
     from proxmox_mcp.tools.cluster import get_next_vmid
 
@@ -184,7 +175,6 @@ async def test_get_next_vmid_error(mock_client):
 # --- list_pools ---
 
 
-@pytest.mark.asyncio
 async def test_list_pools(mock_client):
     from proxmox_mcp.tools.cluster import list_pools
 
@@ -201,7 +191,6 @@ async def test_list_pools(mock_client):
     assert result["pools"][0]["poolid"] == "production"
 
 
-@pytest.mark.asyncio
 async def test_list_pools_empty(mock_client):
     from proxmox_mcp.tools.cluster import list_pools
 
@@ -215,7 +204,6 @@ async def test_list_pools_empty(mock_client):
     assert result["pools"] == []
 
 
-@pytest.mark.asyncio
 async def test_list_pools_error(mock_client):
     from proxmox_mcp.tools.cluster import list_pools
 
@@ -230,7 +218,6 @@ async def test_list_pools_error(mock_client):
 # --- create_pool ---
 
 
-@pytest.mark.asyncio
 async def test_create_pool(mock_client):
     from proxmox_mcp.tools.cluster import create_pool
 
@@ -244,7 +231,6 @@ async def test_create_pool(mock_client):
     assert result["poolid"] == "dev-team"
 
 
-@pytest.mark.asyncio
 async def test_create_pool_dry_run(mock_client):
     from proxmox_mcp.tools.cluster import create_pool
 
@@ -260,7 +246,6 @@ async def test_create_pool_dry_run(mock_client):
 # --- modify_pool ---
 
 
-@pytest.mark.asyncio
 async def test_modify_pool_add_vms(mock_client):
     from proxmox_mcp.tools.cluster import modify_pool
 
@@ -274,7 +259,6 @@ async def test_modify_pool_add_vms(mock_client):
     assert "vms" in result["changes"]
 
 
-@pytest.mark.asyncio
 async def test_modify_pool_no_changes(mock_client):
     from proxmox_mcp.tools.cluster import modify_pool
 
@@ -289,7 +273,6 @@ async def test_modify_pool_no_changes(mock_client):
 # --- delete_pool ---
 
 
-@pytest.mark.asyncio
 async def test_delete_pool_requires_confirm(mock_client):
     from proxmox_mcp.tools.cluster import delete_pool
 
@@ -299,7 +282,6 @@ async def test_delete_pool_requires_confirm(mock_client):
     assert result["status"] == "confirmation_required"
 
 
-@pytest.mark.asyncio
 async def test_delete_pool_confirmed(mock_client):
     from proxmox_mcp.tools.cluster import delete_pool
 
@@ -313,7 +295,6 @@ async def test_delete_pool_confirmed(mock_client):
     assert result["poolid"] == "dev-team"
 
 
-@pytest.mark.asyncio
 async def test_delete_pool_error(mock_client):
     from proxmox_mcp.tools.cluster import delete_pool
 
@@ -329,7 +310,6 @@ async def test_delete_pool_error(mock_client):
 # --- list_users ---
 
 
-@pytest.mark.asyncio
 async def test_list_users(mock_client):
     from proxmox_mcp.tools.cluster import list_users
 
@@ -348,7 +328,6 @@ async def test_list_users(mock_client):
 # --- create_user ---
 
 
-@pytest.mark.asyncio
 async def test_create_user(mock_client):
     from proxmox_mcp.tools.cluster import create_user
 
@@ -370,7 +349,6 @@ async def test_create_user(mock_client):
 # --- delete_user ---
 
 
-@pytest.mark.asyncio
 async def test_delete_user_requires_confirm(mock_client):
     from proxmox_mcp.tools.cluster import delete_user
 
@@ -380,7 +358,6 @@ async def test_delete_user_requires_confirm(mock_client):
     assert result["status"] == "confirmation_required"
 
 
-@pytest.mark.asyncio
 async def test_delete_user_confirmed(mock_client):
     from proxmox_mcp.tools.cluster import delete_user
 
@@ -396,7 +373,6 @@ async def test_delete_user_confirmed(mock_client):
 # --- list_roles ---
 
 
-@pytest.mark.asyncio
 async def test_list_roles(mock_client):
     from proxmox_mcp.tools.cluster import list_roles
 
@@ -415,7 +391,6 @@ async def test_list_roles(mock_client):
 # --- set_user_permission ---
 
 
-@pytest.mark.asyncio
 async def test_set_user_permission(mock_client):
     from proxmox_mcp.tools.cluster import set_user_permission
 
@@ -432,7 +407,6 @@ async def test_set_user_permission(mock_client):
     assert result["path"] == "/vms/100"
 
 
-@pytest.mark.asyncio
 async def test_set_user_permission_requires_users_or_groups(mock_client):
     from proxmox_mcp.tools.cluster import set_user_permission
 
@@ -445,7 +419,6 @@ async def test_set_user_permission_requires_users_or_groups(mock_client):
 # --- list_ha_resources ---
 
 
-@pytest.mark.asyncio
 async def test_list_ha_resources(mock_client):
     from proxmox_mcp.tools.cluster import list_ha_resources
 
@@ -463,7 +436,6 @@ async def test_list_ha_resources(mock_client):
 # --- create_ha_resource ---
 
 
-@pytest.mark.asyncio
 async def test_create_ha_resource(mock_client):
     from proxmox_mcp.tools.cluster import create_ha_resource
 
@@ -477,7 +449,6 @@ async def test_create_ha_resource(mock_client):
     assert result["sid"] == "vm:100"
 
 
-@pytest.mark.asyncio
 async def test_create_ha_resource_invalid_state(mock_client):
     from proxmox_mcp.tools.cluster import create_ha_resource
 
@@ -490,7 +461,6 @@ async def test_create_ha_resource_invalid_state(mock_client):
 # --- modify_ha_resource ---
 
 
-@pytest.mark.asyncio
 async def test_modify_ha_resource(mock_client):
     from proxmox_mcp.tools.cluster import modify_ha_resource
 
@@ -504,7 +474,6 @@ async def test_modify_ha_resource(mock_client):
     assert "state" in result["changes"]
 
 
-@pytest.mark.asyncio
 async def test_modify_ha_resource_no_changes(mock_client):
     from proxmox_mcp.tools.cluster import modify_ha_resource
 
@@ -519,7 +488,6 @@ async def test_modify_ha_resource_no_changes(mock_client):
 # --- delete_ha_resource ---
 
 
-@pytest.mark.asyncio
 async def test_delete_ha_resource_requires_confirm(mock_client):
     from proxmox_mcp.tools.cluster import delete_ha_resource
 
@@ -529,7 +497,6 @@ async def test_delete_ha_resource_requires_confirm(mock_client):
     assert result["status"] == "confirmation_required"
 
 
-@pytest.mark.asyncio
 async def test_delete_ha_resource_confirmed(mock_client):
     from proxmox_mcp.tools.cluster import delete_ha_resource
 
@@ -548,7 +515,6 @@ async def test_delete_ha_resource_confirmed(mock_client):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_create_user_requires_confirm(mock_client):
     from proxmox_mcp.tools.cluster import create_user
 
@@ -559,7 +525,6 @@ async def test_create_user_requires_confirm(mock_client):
     mock_client.api_call.assert_not_called()
 
 
-@pytest.mark.asyncio
 async def test_get_cluster_log_clamps_max_entries(mock_client):
     from proxmox_mcp.tools.cluster import get_cluster_log
 
@@ -569,7 +534,6 @@ async def test_get_cluster_log_clamps_max_entries(mock_client):
     assert mock_client.api_call.call_args.kwargs.get("max") == 1000
 
 
-@pytest.mark.asyncio
 async def test_set_user_permission_requires_confirm(mock_client):
     from proxmox_mcp.tools.cluster import set_user_permission
 
@@ -579,7 +543,6 @@ async def test_set_user_permission_requires_confirm(mock_client):
     assert result["status"] == "confirmation_required"
 
 
-@pytest.mark.asyncio
 async def test_set_user_permission_unknown_role(mock_client):
     from proxmox_mcp.tools.cluster import set_user_permission
 
@@ -592,7 +555,6 @@ async def test_set_user_permission_unknown_role(mock_client):
     assert "NoSuchRole" in result["message"]
 
 
-@pytest.mark.asyncio
 async def test_set_user_permission_bad_role_chars(mock_client):
     from proxmox_mcp.tools.cluster import set_user_permission
 
@@ -605,7 +567,6 @@ async def test_set_user_permission_bad_role_chars(mock_client):
     assert result["error_type"] == "InvalidParameterError"
 
 
-@pytest.mark.asyncio
 async def test_set_user_permission_bad_path(mock_client):
     from proxmox_mcp.tools.cluster import set_user_permission
 

@@ -30,7 +30,6 @@ SAMPLE_DEVICE = {
 # --- list_node_pci_devices ---
 
 
-@pytest.mark.asyncio
 async def test_list_node_pci_devices(mock_client):
     from proxmox_mcp.tools.pci import list_node_pci_devices
 
@@ -43,7 +42,6 @@ async def test_list_node_pci_devices(mock_client):
     assert result["devices"] == [SAMPLE_DEVICE]
 
 
-@pytest.mark.asyncio
 async def test_list_node_pci_devices_error(mock_client):
     from proxmox_mcp.tools.pci import list_node_pci_devices
 
@@ -56,7 +54,6 @@ async def test_list_node_pci_devices_error(mock_client):
 # --- list_pci_mappings ---
 
 
-@pytest.mark.asyncio
 async def test_list_pci_mappings(mock_client):
     from proxmox_mcp.tools.pci import list_pci_mappings
 
@@ -69,7 +66,6 @@ async def test_list_pci_mappings(mock_client):
     assert result["mappings"] == mappings
 
 
-@pytest.mark.asyncio
 async def test_list_pci_mappings_empty(mock_client):
     from proxmox_mcp.tools.pci import list_pci_mappings
 
@@ -83,7 +79,6 @@ async def test_list_pci_mappings_empty(mock_client):
 # --- create_pci_mapping ---
 
 
-@pytest.mark.asyncio
 async def test_create_pci_mapping_requires_confirm(mock_client):
     from proxmox_mcp.tools.pci import create_pci_mapping
 
@@ -91,7 +86,6 @@ async def test_create_pci_mapping_requires_confirm(mock_client):
     assert result["status"] == "confirmation_required"
 
 
-@pytest.mark.asyncio
 async def test_create_pci_mapping_confirmed(mock_client):
     from proxmox_mcp.tools.pci import create_pci_mapping
 
@@ -106,7 +100,6 @@ async def test_create_pci_mapping_confirmed(mock_client):
     assert "iommu-group=45" in result["map_entry"]
 
 
-@pytest.mark.asyncio
 async def test_create_pci_mapping_device_not_found(mock_client):
     from proxmox_mcp.tools.pci import create_pci_mapping
 
@@ -116,7 +109,6 @@ async def test_create_pci_mapping_device_not_found(mock_client):
     assert result["status"] == "error"
 
 
-@pytest.mark.asyncio
 async def test_create_pci_mapping_dry_run(mock_client):
     from proxmox_mcp.tools.pci import create_pci_mapping
 
@@ -126,7 +118,6 @@ async def test_create_pci_mapping_dry_run(mock_client):
     assert result["status"] == "dry_run"
 
 
-@pytest.mark.asyncio
 async def test_create_pci_mapping_invalid_id(mock_client):
     from proxmox_mcp.tools.pci import create_pci_mapping
 
@@ -134,7 +125,6 @@ async def test_create_pci_mapping_invalid_id(mock_client):
     assert result["status"] == "error"
 
 
-@pytest.mark.asyncio
 async def test_create_pci_mapping_with_comment(mock_client):
     from proxmox_mcp.tools.pci import create_pci_mapping
 
@@ -150,7 +140,6 @@ async def test_create_pci_mapping_with_comment(mock_client):
 # --- add_pci_mapping_target ---
 
 
-@pytest.mark.asyncio
 async def test_add_pci_mapping_target_requires_confirm(mock_client):
     from proxmox_mcp.tools.pci import add_pci_mapping_target
 
@@ -158,7 +147,6 @@ async def test_add_pci_mapping_target_requires_confirm(mock_client):
     assert result["status"] == "confirmation_required"
 
 
-@pytest.mark.asyncio
 async def test_add_pci_mapping_target_confirmed(mock_client):
     from proxmox_mcp.tools.pci import add_pci_mapping_target
 
@@ -175,7 +163,6 @@ async def test_add_pci_mapping_target_confirmed(mock_client):
 # --- delete_pci_mapping ---
 
 
-@pytest.mark.asyncio
 async def test_delete_pci_mapping_requires_confirm(mock_client):
     from proxmox_mcp.tools.pci import delete_pci_mapping
 
@@ -183,7 +170,6 @@ async def test_delete_pci_mapping_requires_confirm(mock_client):
     assert result["status"] == "confirmation_required"
 
 
-@pytest.mark.asyncio
 async def test_delete_pci_mapping_confirmed(mock_client):
     from proxmox_mcp.tools.pci import delete_pci_mapping
 
@@ -194,7 +180,6 @@ async def test_delete_pci_mapping_confirmed(mock_client):
     assert result["deleted"] is True
 
 
-@pytest.mark.asyncio
 async def test_delete_pci_mapping_dry_run(mock_client):
     from proxmox_mcp.tools.pci import delete_pci_mapping
 
@@ -204,7 +189,6 @@ async def test_delete_pci_mapping_dry_run(mock_client):
     assert result["status"] == "dry_run"
 
 
-@pytest.mark.asyncio
 async def test_delete_pci_mapping_invalid_id(mock_client):
     from proxmox_mcp.tools.pci import delete_pci_mapping
 
@@ -215,7 +199,6 @@ async def test_delete_pci_mapping_invalid_id(mock_client):
 # --- assign_pci_device ---
 
 
-@pytest.mark.asyncio
 async def test_assign_pci_device_requires_confirm(mock_client):
     from proxmox_mcp.tools.pci import assign_pci_device
 
@@ -223,7 +206,6 @@ async def test_assign_pci_device_requires_confirm(mock_client):
     assert result["status"] == "confirmation_required"
 
 
-@pytest.mark.asyncio
 async def test_assign_pci_device_confirmed(mock_client):
     from proxmox_mcp.tools.pci import assign_pci_device
 
@@ -240,7 +222,6 @@ async def test_assign_pci_device_confirmed(mock_client):
     assert "x-vga=0" in result["config_value"]
 
 
-@pytest.mark.asyncio
 async def test_assign_pci_device_protected(mock_client):
     from proxmox_mcp.tools.pci import assign_pci_device
     from proxmox_mcp.utils.errors import ProtectedResourceError
@@ -250,7 +231,6 @@ async def test_assign_pci_device_protected(mock_client):
     assert result["status"] == "error"
 
 
-@pytest.mark.asyncio
 async def test_assign_pci_device_invalid_slot(mock_client):
     from proxmox_mcp.tools.pci import assign_pci_device
 
@@ -258,7 +238,6 @@ async def test_assign_pci_device_invalid_slot(mock_client):
     assert result["status"] == "error"
 
 
-@pytest.mark.asyncio
 async def test_assign_pci_device_dry_run(mock_client):
     from proxmox_mcp.tools.pci import assign_pci_device
 
@@ -271,7 +250,6 @@ async def test_assign_pci_device_dry_run(mock_client):
 # --- remove_pci_device ---
 
 
-@pytest.mark.asyncio
 async def test_remove_pci_device_requires_confirm(mock_client):
     from proxmox_mcp.tools.pci import remove_pci_device
 
@@ -279,7 +257,6 @@ async def test_remove_pci_device_requires_confirm(mock_client):
     assert result["status"] == "confirmation_required"
 
 
-@pytest.mark.asyncio
 async def test_remove_pci_device_confirmed(mock_client):
     from proxmox_mcp.tools.pci import remove_pci_device
 
@@ -293,7 +270,6 @@ async def test_remove_pci_device_confirmed(mock_client):
     assert call_kwargs["delete"] == "hostpci0"
 
 
-@pytest.mark.asyncio
 async def test_remove_pci_device_protected(mock_client):
     from proxmox_mcp.tools.pci import remove_pci_device
     from proxmox_mcp.utils.errors import ProtectedResourceError

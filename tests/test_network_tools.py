@@ -21,7 +21,6 @@ def mock_client():
 # --- get_node_firewall_rules ---
 
 
-@pytest.mark.asyncio
 async def test_get_node_firewall_rules(mock_client):
     from proxmox_mcp.tools.network import get_node_firewall_rules
 
@@ -38,7 +37,6 @@ async def test_get_node_firewall_rules(mock_client):
     assert result["rules"] == rules
 
 
-@pytest.mark.asyncio
 async def test_get_node_firewall_rules_empty(mock_client):
     from proxmox_mcp.tools.network import get_node_firewall_rules
 
@@ -50,7 +48,6 @@ async def test_get_node_firewall_rules_empty(mock_client):
     assert result["rules"] == []
 
 
-@pytest.mark.asyncio
 async def test_get_node_firewall_rules_error(mock_client):
     from proxmox_mcp.tools.network import get_node_firewall_rules
 
@@ -63,7 +60,6 @@ async def test_get_node_firewall_rules_error(mock_client):
 # --- get_vm_firewall_rules ---
 
 
-@pytest.mark.asyncio
 async def test_get_vm_firewall_rules(mock_client):
     from proxmox_mcp.tools.network import get_vm_firewall_rules
 
@@ -76,7 +72,6 @@ async def test_get_vm_firewall_rules(mock_client):
     assert result["total"] == 1
 
 
-@pytest.mark.asyncio
 async def test_get_vm_firewall_rules_fallback_to_lxc(mock_client):
     from proxmox_mcp.tools.network import get_vm_firewall_rules
 
@@ -91,7 +86,6 @@ async def test_get_vm_firewall_rules_fallback_to_lxc(mock_client):
     assert result["rules"] == lxc_rules
 
 
-@pytest.mark.asyncio
 async def test_get_vm_firewall_rules_error(mock_client):
     from proxmox_mcp.tools.network import get_vm_firewall_rules
 
@@ -104,7 +98,6 @@ async def test_get_vm_firewall_rules_error(mock_client):
 # --- get_vm_interfaces ---
 
 
-@pytest.mark.asyncio
 async def test_get_vm_interfaces(mock_client):
     from proxmox_mcp.tools.network import get_vm_interfaces
 
@@ -117,7 +110,6 @@ async def test_get_vm_interfaces(mock_client):
     assert len(result["interfaces"]) == 1
 
 
-@pytest.mark.asyncio
 async def test_get_vm_interfaces_fallback_to_lxc(mock_client):
     from proxmox_mcp.tools.network import get_vm_interfaces
 
@@ -129,7 +121,6 @@ async def test_get_vm_interfaces_fallback_to_lxc(mock_client):
     assert result["interfaces"] == lxc_ifaces
 
 
-@pytest.mark.asyncio
 async def test_get_vm_interfaces_error(mock_client):
     from proxmox_mcp.tools.network import get_vm_interfaces
 
@@ -143,7 +134,6 @@ async def test_get_vm_interfaces_error(mock_client):
 # --- create_node_firewall_rule ---
 
 
-@pytest.mark.asyncio
 async def test_create_node_firewall_rule(mock_client):
     from proxmox_mcp.tools.network import create_node_firewall_rule
 
@@ -156,7 +146,6 @@ async def test_create_node_firewall_rule(mock_client):
     assert result["rule"]["dport"] == "22"
 
 
-@pytest.mark.asyncio
 async def test_create_node_firewall_rule_invalid_action(mock_client):
     from proxmox_mcp.tools.network import create_node_firewall_rule
 
@@ -165,7 +154,6 @@ async def test_create_node_firewall_rule_invalid_action(mock_client):
     assert "ALLOW" in result["message"]
 
 
-@pytest.mark.asyncio
 async def test_create_node_firewall_rule_dry_run(mock_client):
     from proxmox_mcp.tools.network import create_node_firewall_rule
 
@@ -178,7 +166,6 @@ async def test_create_node_firewall_rule_dry_run(mock_client):
 # --- delete_node_firewall_rule ---
 
 
-@pytest.mark.asyncio
 async def test_delete_node_firewall_rule_requires_confirm(mock_client):
     from proxmox_mcp.tools.network import delete_node_firewall_rule
 
@@ -186,7 +173,6 @@ async def test_delete_node_firewall_rule_requires_confirm(mock_client):
     assert result["status"] == "confirmation_required"
 
 
-@pytest.mark.asyncio
 async def test_delete_node_firewall_rule_confirmed(mock_client):
     from proxmox_mcp.tools.network import delete_node_firewall_rule
 
@@ -199,7 +185,6 @@ async def test_delete_node_firewall_rule_confirmed(mock_client):
 # --- create_vm_firewall_rule ---
 
 
-@pytest.mark.asyncio
 async def test_create_vm_firewall_rule(mock_client):
     from proxmox_mcp.tools.network import create_vm_firewall_rule
 
@@ -212,7 +197,6 @@ async def test_create_vm_firewall_rule(mock_client):
     assert result["rule"]["action"] == "DROP"
 
 
-@pytest.mark.asyncio
 async def test_create_vm_firewall_rule_protected(mock_client):
     from proxmox_mcp.tools.network import create_vm_firewall_rule
     from proxmox_mcp.utils.errors import ProtectedResourceError
@@ -225,7 +209,6 @@ async def test_create_vm_firewall_rule_protected(mock_client):
 # --- delete_vm_firewall_rule ---
 
 
-@pytest.mark.asyncio
 async def test_delete_vm_firewall_rule_requires_confirm(mock_client):
     from proxmox_mcp.tools.network import delete_vm_firewall_rule
 
@@ -233,7 +216,6 @@ async def test_delete_vm_firewall_rule_requires_confirm(mock_client):
     assert result["status"] == "confirmation_required"
 
 
-@pytest.mark.asyncio
 async def test_delete_vm_firewall_rule_confirmed(mock_client):
     from proxmox_mcp.tools.network import delete_vm_firewall_rule
 
@@ -248,7 +230,6 @@ async def test_delete_vm_firewall_rule_confirmed(mock_client):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
 async def test_get_vm_firewall_rules_non_404_no_fallback(mock_client):
     from proxmox_mcp.tools.network import get_vm_firewall_rules
 
@@ -259,7 +240,6 @@ async def test_get_vm_firewall_rules_non_404_no_fallback(mock_client):
     assert mock_client.api_call.call_count == 1
 
 
-@pytest.mark.asyncio
 async def test_get_vm_interfaces_non_404_no_fallback(mock_client):
     from proxmox_mcp.tools.network import get_vm_interfaces
 
